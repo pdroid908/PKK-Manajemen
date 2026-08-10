@@ -1,4 +1,5 @@
-package api
+package handler
+
 import (
 	"log"
 	"net/http"
@@ -17,21 +18,50 @@ import (
 var app *gin.Engine
 
 func init() {
-	// 1. Load .env jika ada
+	// 1. Load file .env jika ada (saat local dev)
 	_ = godotenv.Load()
 
-	// 2. Inisialisasi Database
-	NewDB, err := database.OnDB()
-	if err != nil {
-		log.Printf("Gagal menginisialisasi database: %v", err)
-	} else {
-		log.Println("Database Serverless berhasil terhubung!")
-	}
+	// 2. Setup Router Gin
+	gin.SetMode(gin.ReleaseMode)
+	app = gin.New()
+	app.Use(gin.Recovery())
 
-	// 3. Inisialisasi Redis
+	// 3. Setup CORS (Bisa menerima dari localhost dan Vercel frontend/backend)
+	app.Use(cors.New(cors.Config{
+		AllowOriginFunc: func(origin string) bool {
+			// Izinkan semua domain localhost & vercel
+			return true
+		},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
+	// 4. Root & Health Check Endpoint (Mencegah crash jika root URL diakses)
+	app.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "success",
+			"message": "API PKK Management Serverless Running Perfectly!",
+		})
+	})
+
+	app.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "OK"})
+	})
+
+	// 5. Inisialisasi Database dengan Penanganan Crash
+	NewDB, err := database.OnDB()
+	if err != nil || NewDB == nil {
+		log.Printf("[ERROR] Gagal menginisialisasi database: %v", err)
+		return
+	}
+	log.Println("[INFO] Database Serverless berhasil terhubung!")
+
+	// 6. Inisialisasi Redis
 	redis.ONRedis()
 
-	// 4. Inisialisasi Struct Handler
+	// 7. Inisialisasi DB Handlers
 	AdminDb := &admin.DB{
 		Database: NewDB.Database,
 	}
@@ -44,22 +74,8 @@ func init() {
 		Database: NewDB.Database,
 	}
 
-	// 5. Setup Router Gin
-	gin.SetMode(gin.ReleaseMode)
-	app = gin.New()
-	app.Use(gin.Recovery())
+	// --- ROUTING ENDPOINT (Sama Persis dengan main.go) ---
 
-	// Setup CORS
-	app.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "https://pkk-manajemen.vercel.app","https://pkk-manajemen-91ah.vercel.app"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-	}))
-
-	// --- ROUTING ENDPOINT ---
-	
 	// admin pengumuman
 	app.POST("/admin/add/dashboard", AdminDb.AddPengumuman())
 	app.GET("/admin/pengumuman", AdminDb.CekPengumuman())
@@ -95,7 +111,7 @@ func init() {
 	app.POST("/user/pinjam", BarangDb.AddPinjam())
 }
 
-// Handler adalah Entry Point utama yang dipanggil Vercel setiap kali ada request HTTP
+// Handler adalah Entry Point utama Vercel Serverless Function
 func Handler(w http.ResponseWriter, r *http.Request) {
 	app.ServeHTTP(w, r)
 }
