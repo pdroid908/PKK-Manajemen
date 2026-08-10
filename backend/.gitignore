@@ -1,0 +1,16 @@
+# Backend (Go & Air Live Reload)
+backend/tmp/
+backend/*.exe
+backend/main
+*.exe
+
+# Frontend (React & Node)
+frontendReact/node_modules/
+frontendReact/dist/
+frontendReact/.vite/
+
+# File Rahasia & OS
+.env
+*.env
+.DS_Store
+Thumbs.db
