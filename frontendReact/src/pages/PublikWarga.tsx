@@ -1,38 +1,27 @@
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import { apiFetch } from "../lib/api";
-
+import { useQuery } from "@tanstack/react-query";
 interface WargaPublik {
   id: string;
   nama: string;
 }
 
 export default function PublikWarga() {
-  const [wargaList, setWargaList] = useState<WargaPublik[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    const fetchPublikWarga = async () => {
-      try {
-        const response = await apiFetch("/warga/data?aktif=true");
-        if (response.ok) {
-          const result = await response.json();
-          if (Array.isArray(result.data)) {
-            const filteredData = result.data.map((item: { id: string; nama: string }) => ({
-              id: item.id,
-              nama: item.nama,
-            }));
-            setWargaList(filteredData);
-          }
-        }
-      } catch (error) {
-        console.error("Gagal memuat data warga publik:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void fetchPublikWarga();
-  }, []);
+  const { data: wargaList = [], isLoading } = useQuery<WargaPublik[]>({
+  queryKey: ["warga-public"],
+  queryFn: async () => {
+    const response = await apiFetch("/warga/data?aktif=true");
+    if (!response.ok) throw new Error("Gagal memuat data warga.");
+    const result = await response.json();
+    if (Array.isArray(result.data)) {
+      return result.data.map((item: { id: string; nama: string }) => ({
+        id: item.id,
+        nama: item.nama,
+      }));
+    }
+    return [];
+  },
+});
 
   const decorationStyles = [
     { bg: "bg-rose-500/90", text: "text-white", border: "border-rose-300/50", icon: "fa-heart", badge: "❤️" },
