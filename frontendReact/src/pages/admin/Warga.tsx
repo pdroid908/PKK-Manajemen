@@ -28,7 +28,6 @@ export default function WargaManagement() {
   // Filter States
   const [filterAktifOnly, setFilterAktifOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
 
   // Loading States
   const [isCreating, setIsCreating] = useState<boolean>(false);
@@ -97,22 +96,15 @@ export default function WargaManagement() {
   }, [filterAktifOnly]);
 
   // Filtering Data berdasarkan Search Query dan Abjad
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => {
-      const matchesSearch =
-        item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.rt_rw.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (item.no_hp && item.no_hp.includes(searchQuery));
-
-      const matchesLetter =
-        selectedLetter === "ALL"
-          ? true
-          : item.nama.trim().toUpperCase().startsWith(selectedLetter);
-
-      return matchesSearch && matchesLetter;
-    });
-  }, [items, searchQuery, selectedLetter]);
-    
+ const filteredItems = useMemo(() => {
+  return items.filter((item) => {
+    return (
+      item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.rt_rw.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (item.no_hp && item.no_hp.includes(searchQuery))
+    );
+  });
+}, [items, searchQuery]); 
     // Handler Aktifkan Kembali
 const handleRestore = async (id: string) => {
   try {
@@ -261,8 +253,6 @@ const handleHardDelete = async (id: string) => {
     XLSX.writeFile(workbook, `Data_Warga_${new Date().toISOString().split("T")[0]}.xlsx`);
     showToast("Berhasil mengunduh data warga ke Excel!", "success");
   };
-
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
   return (
     <div className="relative">
@@ -561,20 +551,6 @@ const handleHardDelete = async (id: string) => {
               )}
             </div>
 
-            {/* FILTER FILTER BY ALFABET (A-Z) */}
-            <div className="flex items-center gap-1 overflow-x-auto pb-1 pt-1 no-scrollbar text-xs">
-              <button
-                onClick={() => setSelectedLetter("ALL")}
-                className={`px-2.5 py-1 rounded-lg font-semibold shrink-0 transition-all cursor-pointer ${
-                  selectedLetter === "ALL"
-                    ? "bg-emerald-600 text-white"
-                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-                }`}
-              >
-                Semua
-              </button>
-             
-            </div>
           </div>
 
           {isFetchingInitial ? (
