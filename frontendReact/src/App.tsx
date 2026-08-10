@@ -4,6 +4,8 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
 import Login from "./pages/Login";
 import AdminLayout from "./layout/AdminLayout";
 import AdminPengumuman from "./pages/admin/Admin";
@@ -15,9 +17,22 @@ import PublicLayout from "./layout/PublicLayout";
 import KeuanganPublic from "./pages/KeuanganPublic";
 import Inventory from "./pages/admin/Inventory";
 import Adminpinjaman from "./pages/admin/AdminPinjaman";
-import WargaManagement  from "./pages/admin/Warga";
+import WargaManagement from "./pages/admin/Warga";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 15, // Data dianggap segar selama 5 menit (TIDAK AKAN FETCH ULANG)
+      gcTime: 1000 * 60 * 30,    // Cache disimpan di memori selama 30 menit
+      refetchOnWindowFocus: false, // Tidak fetch ulang saat tab browser diklik
+    },
+  },
+});
+
+
 export default function App() {
   return (
+    <QueryClientProvider client={queryClient}>
     <Router>
       <Routes>
         {/* Redirect root '/' langsung ke halaman dashboard publik */}
@@ -47,6 +62,7 @@ export default function App() {
         {/* Fallback jika URL tidak ditemukan */}
         <Route path="*" element={<Navigate to="/publik/dashboard" replace />} />
       </Routes>
-    </Router>
+      </Router>
+      </QueryClientProvider>
   );
 }

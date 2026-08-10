@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api";
 
 interface PostItem {
@@ -27,8 +28,6 @@ interface PengumumanResponse {
 }
 
 export default function Dashboard() {
-  const [latestItem, setLatestItem] = useState<PostItem | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const formatDate = (dateString: string) => {
@@ -67,76 +66,31 @@ export default function Dashboard() {
       .join(" ");
   };
 
-  useEffect(() => {
-    let isMounted = true;
+  // MENGGUNAKAN REACT QUERY (DATA DICACHE OTOMATIS)
+  const { data: latestItem = null, isLoading } = useQuery<PostItem | null>({
+    queryKey: ["pengumuman-latest"],
+    queryFn: async () => {
+      const response = await apiFetch("/admin/pengumuman");
+      const result: PengumumanResponse = await response.json();
 
-    const loadPengumuman = async () => {
-      try {
-        const response = await apiFetch("/admin/pengumuman");
-        const result: PengumumanResponse = await response.json();
-
-        if (isMounted && response.ok && result.data && result.data.length > 0) {
-          const mappedData: PostItem[] = result.data.map((item) => ({
-            id: item.id,
-            title: item.title,
-            date: formatDate(item.event_date),
-            time: formatTime(item.event_time),
-            location: item.location,
-            description: item.description,
-            image: item.image_name || undefined,
-          }));
-
-          setLatestItem(mappedData[0]);
-        }
-      } catch (error) {
-        console.error("Gagal memuat pengumuman:", error);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+      if (response.ok && result.data && result.data.length > 0) {
+        const mappedData: PostItem[] = result.data.map((item) => ({
+          id: item.id,
+          title: item.title,
+          date: formatDate(item.event_date),
+          time: formatTime(item.event_time),
+          location: item.location,
+          description: item.description,
+          image: item.image_name || undefined,
+        }));
+        return mappedData[0];
       }
-    };
-
-    void loadPengumuman();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      return null;
+    },
+  });
 
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-12">
-      {/* BANNER SAMBUTAN (Auto-dismiss)
-      {showWelcome && (
-        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-600 to-teal-700 px-5 py-3.5 rounded-2xl text-white shadow-md transition-all">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <i className="fa-solid fa-leaf text-emerald-100 text-xs"></i>
-            </div>
-            <p className="text-xs sm:text-sm font-bold truncate">
-              Selamat Datang, Ibu-Ibu PKK Tercinta! 👋
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={fetchPengumuman}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs transition cursor-pointer"
-              title="Muat Ulang"
-            >
-              <i className="fa-solid fa-rotate"></i>
-            </button>
-            <button
-              onClick={() => setShowWelcome(false)}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-xs transition cursor-pointer"
-              title="Tutup Sambutan"
-            >
-              <i className="fa-solid fa-xmark"></i>
-            </button>
-          </div>
-        </div>
-      )} */}
-
       {/* KONTEN UTAMA PENGUMUMAN */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20 text-emerald-600 space-y-3 bg-white rounded-3xl border border-emerald-100 shadow-sm">
@@ -171,7 +125,7 @@ export default function Dashboard() {
             </h2>
           </div>
 
-          {/* KOTAK TANGGAL & LOKASI (Dibuat Lebih Kompak/Pendek Agar Tidak Makan Tempat) */}
+          {/* KOTAK TANGGAL & LOKASI */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div className="flex items-center gap-2.5 p-2.5 sm:p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 shadow-2xs">
               <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs text-xs">
@@ -202,9 +156,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* BAGIAN UTAMA: FOTO & DESKRIPSI (Responsif: HP Foto di Atas, Laptop Menyamping) */}
+          {/* BAGIAN UTAMA: FOTO & DESKRIPSI */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-            {/* FOTO (Di HP tampil di atas, di Laptop pindah ke kanan) */}
             {latestItem.image && (
               <div className="lg:col-span-5 lg:order-last w-full flex flex-col items-center">
                 <div className="w-full space-y-1.5">
@@ -222,8 +175,7 @@ export default function Dashboard() {
                     />
                     <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
                       <span className="text-[11px] font-bold text-white bg-slate-900/90 backdrop-blur-xs px-3 py-2 rounded-xl w-full text-center shadow-md">
-                        <i className="fa-solid fa-expand mr-1.5"></i> Perbesar
-                        Foto (Zoom)
+                        <i className="fa-solid fa-expand mr-1.5"></i> Perbesar Foto (Zoom)
                       </span>
                     </div>
                   </div>
@@ -231,7 +183,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* DESKRIPSI (Dibuat Lebih Kontras dan Jelas Terbaca) */}
             <div
               className={`w-full space-y-1.5 ${latestItem.image ? "lg:col-span-7" : "lg:col-span-12"}`}
             >
@@ -246,11 +197,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* SEKSI JADWAL RUTIN, PENGURUS, & SPONSOR                   */}
-      {/* ========================================================= */}
+      {/* SEKSI JADWAL RUTIN, PENGURUS, & SPONSOR */}
       <div className="space-y-4 pt-2">
-        {/* 1. JADWAL KEGIATAN RUTIN PKK */}
         <div className="bg-white rounded-3xl border-2 border-emerald-100 p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
             <div className="flex items-center gap-2.5">
@@ -272,7 +220,6 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {/* Item 1: Arisan */}
             <div className="p-3.5 rounded-2xl bg-amber-50/60 border border-amber-200 flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0 shadow-xs text-xs font-bold">
                 <i className="fa-solid fa-coins"></i>
@@ -288,7 +235,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Item 2: Posyandu */}
             <div className="p-3.5 rounded-2xl bg-rose-50/60 border border-rose-200 flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs text-xs font-bold">
                 <i className="fa-solid fa-heart-pulse"></i>
@@ -304,7 +250,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Item 3: Senam */}
             <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200 flex items-start gap-3">
               <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs text-xs font-bold">
                 <i className="fa-solid fa-child-reaching"></i>
@@ -322,7 +267,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 2. STRUKTUR PENGURUS INTI PKK */}
         <div className="bg-white rounded-3xl border-2 border-emerald-100 p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2.5 border-b border-emerald-100 pb-3">
             <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -369,7 +313,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 3. DUKUNGAN & SPONSORSHIP */}
         <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-md space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
             <div className="flex items-center gap-2.5">
@@ -412,7 +355,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MODAL POP-UP / LIGHTBOX ZOOM FOTO */}
+      {/* MODAL LIGHTBOX FOTO */}
       {selectedImage && (
         <div
           className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in"

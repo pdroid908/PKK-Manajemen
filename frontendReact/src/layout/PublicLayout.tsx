@@ -51,7 +51,7 @@ export default function PublicLayout() {
             <i className="fa-solid fa-bars text-xl"></i>
           </button>
           <span className="font-bold text-base tracking-wide flex items-center gap-1.5">
-            Portal Warga <span className="animate-gentle-bounce text-sm">😊</span>
+            Portal PKK <span className="animate-gentle-bounce text-sm">😊</span>
           </span>
         </div>
 

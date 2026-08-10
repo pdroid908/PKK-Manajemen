@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "../lib/api";
 
 interface FinanceTransaction {
@@ -18,17 +19,18 @@ interface FinanceResponse {
 }
 
 export default function KeuanganPublic() {
-  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
-  const [isFetching, setIsFetching] = useState<boolean>(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [hoveredItem, setHoveredItem] = useState<FinanceTransaction | null>(
-    null,
-  );
+  const [hoveredItem, setHoveredItem] = useState<FinanceTransaction | null>(null);
 
-  const fetchKeuanganPublic = useCallback(async () => {
-    setIsFetching(true);
-    setErrorMessage(null);
-    try {
+  // MENGGUNAKAN REACT QUERY (DATA DICACHE OTOMATIS)
+  const {
+    data: transactions = [],
+    isLoading: isFetching,
+    isError,
+    error,
+    refetch: fetchKeuanganPublic,
+  } = useQuery<FinanceTransaction[]>({
+    queryKey: ["keuangan-public"],
+    queryFn: async () => {
       const response = await apiFetch("/admin/data/amount");
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
@@ -38,54 +40,11 @@ export default function KeuanganPublic() {
       const result: FinanceResponse = await response.json();
 
       if (response.ok && (result.data || Array.isArray(result))) {
-        setTransactions(Array.isArray(result) ? result : result.data || []);
-      } else {
-        setErrorMessage(result.error || "Gagal memuat data keuangan.");
+        return Array.isArray(result) ? result : result.data || [];
       }
-    } catch (error) {
-      console.error("Gagal terhubung ke backend:", error);
-      setTransactions([]);
-      setErrorMessage("Tidak dapat terhubung ke server backend.");
-    } finally {
-      setIsFetching(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadKeuanganPublic = async () => {
-      try {
-        const response = await apiFetch("/admin/data/amount");
-        const contentType = response.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-          throw new Error("Server tidak mengembalikan format JSON.");
-        }
-
-        const result: FinanceResponse = await response.json();
-
-        if (isMounted && response.ok && (result.data || Array.isArray(result))) {
-          setTransactions(Array.isArray(result) ? result : result.data || []);
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error("Gagal terhubung ke backend:", error);
-          setTransactions([]);
-          setErrorMessage("Tidak dapat terhubung ke server backend.");
-        }
-      } finally {
-        if (isMounted) {
-          setIsFetching(false);
-        }
-      }
-    };
-
-    void loadKeuanganPublic();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      throw new Error(result.error || "Gagal memuat data keuangan.");
+    },
+  });
 
   const formatRupiah = (val: number) => {
     return new Intl.NumberFormat("id-ID", {
@@ -106,16 +65,13 @@ export default function KeuanganPublic() {
     .filter((t) => t.type === "EXPENSE")
     .reduce((acc, curr) => acc + curr.amount, 0);
 
-  // Ambil data untuk statistik (batasi maksimal 12 data terakhir agar rapi)
   const chartData = [...transactions].slice(-12);
 
   const isOverallUp =
     chartData.length >= 2
-      ? chartData[chartData.length - 1].balance_after >=
-        chartData[0].balance_after
+      ? chartData[chartData.length - 1].balance_after >= chartData[0].balance_after
       : true;
 
-  // Warna dinamis hijau atau merah sesuai performa naik/turun
   const themeColor = isOverallUp ? "#10b981" : "#ef4444";
 
   const maxBalance =
@@ -123,18 +79,16 @@ export default function KeuanganPublic() {
       ? Math.max(...chartData.map((t) => t.balance_after))
       : 1;
 
-  // Default item langsung menyoroti data TERBARU (paling akhir)
   const activeDisplayItem =
     hoveredItem ||
     (chartData.length > 0 ? chartData[chartData.length - 1] : null);
 
-  // Konfigurasi ukuran SVG & padding agar sumbu Y sangat dekat ke kiri & lebar batang proporsional
   const svgHeight = 280;
   const paddingTop = 25;
   const paddingBottom = 45;
   const chartHeight = svgHeight - paddingTop - paddingBottom;
 
-  const columnWidth = 44; // Lebar per kolom batang grafik diperbesar agar tidak terlalu kecil/berjarak jauh
+  const columnWidth = 44;
   const dynamicInnerWidth = Math.max(320, chartData.length * columnWidth);
 
   return (
@@ -151,7 +105,7 @@ export default function KeuanganPublic() {
         </div>
         <button
           type="button"
-          onClick={fetchKeuanganPublic}
+          onClick={() => void fetchKeuanganPublic()}
           disabled={isFetching}
           className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 border border-white/10"
         >
@@ -190,7 +144,7 @@ export default function KeuanganPublic() {
         </div>
       </div>
 
-      {/* SECTION UTAMA: GRAFIK DENGAN SUMBU Y STATIS DI KIRI & AREA BATANG BISA DIGESER */}
+      {/* SECTION UTAMA: GRAFIK */}
       <div className="bg-white text-slate-900 rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -235,7 +189,6 @@ export default function KeuanganPublic() {
           </div>
         ) : (
           <div className="relative w-full bg-slate-50/80 rounded-2xl p-1 sm:p-3 border border-slate-100 flex overflow-hidden">
-            {/* 1. Sumbu Y & Grid Statis di Sebelah Kiri (Dibuat sangat tipis dan mepet ke kiri tepi container) */}
             <div className="w-[30px] sm:w-[42px] shrink-0 select-none pointer-events-none bg-slate-50/90 z-10">
               <svg viewBox={`0 0 42 ${svgHeight}`} className="w-full h-64 sm:h-72">
                 {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
@@ -257,7 +210,6 @@ export default function KeuanganPublic() {
                     </text>
                   );
                 })}
-                {/* Garis Sumbu Y Utama sangat mepet ke kiri */}
                 <line
                   x1="40"
                   y1={paddingTop}
@@ -269,12 +221,10 @@ export default function KeuanganPublic() {
               </svg>
             </div>
 
-            {/* 2. Area Grafik Bagian Batang & Sumbu X yang Bisa Digeser (Scroll Horizontal) */}
             <div
               className="relative flex-1 overflow-x-auto scroll-smooth pb-1"
               ref={(el) => {
                 if (el) {
-                  // Otomatis posisikan scroll ke paling kanan (data terbaru) saat pertama kali dimuat
                   el.scrollLeft = el.scrollWidth;
                 }
               }}
@@ -284,7 +234,6 @@ export default function KeuanganPublic() {
                 className="h-64 sm:h-72 overflow-visible"
                 style={{ width: `${dynamicInnerWidth}px` }}
               >
-                {/* Garis Grid Horizontal Lanjutan */}
                 {[0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
                   const y = paddingTop + chartHeight * (1 - ratio);
                   return (
@@ -301,7 +250,6 @@ export default function KeuanganPublic() {
                   );
                 })}
 
-                {/* Garis Sumbu X Utama */}
                 <line
                   x1="0"
                   y1={svgHeight - paddingBottom}
@@ -311,17 +259,14 @@ export default function KeuanganPublic() {
                   strokeWidth="2"
                 />
 
-                {/* Batang Grafik & Tanggal/Tahun di Sumbu Bawah */}
                 {chartData.map((item, index) => {
-                  const actualBarW = 28; // Batang diperlebar agar tidak terlalu kecil/jarang
+                  const actualBarW = 28;
                   const x = index * columnWidth + (columnWidth - actualBarW) / 2;
-
                   const barHeight = Math.max(
                     (item.balance_after / maxBalance) * chartHeight,
                     10,
                   );
                   const y = svgHeight - paddingBottom - barHeight;
-
                   const isSelected = activeDisplayItem?.id === item.id;
                   const rawDate = item.transaction_date.slice(0, 10);
                   const parts = rawDate.split("-");
@@ -333,7 +278,6 @@ export default function KeuanganPublic() {
                       onMouseEnter={() => setHoveredItem(item)}
                       onMouseLeave={() => setHoveredItem(null)}
                     >
-                      {/* Kotak Batang */}
                       <rect
                         x={x}
                         y={y}
@@ -343,8 +287,6 @@ export default function KeuanganPublic() {
                         fill={isSelected ? "#0f172a" : themeColor}
                         className="transition-all duration-200 opacity-90 hover:opacity-100"
                       />
-
-                      {/* Label Tanggal dan Tahun di Sumbu Bawah */}
                       <text
                         x={x + actualBarW / 2}
                         y={svgHeight - paddingBottom + 16}
@@ -391,9 +333,9 @@ export default function KeuanganPublic() {
               ></div>
             ))}
           </div>
-        ) : errorMessage ? (
+        ) : isError ? (
           <div className="py-6 text-center text-rose-600 text-xs font-semibold">
-            {errorMessage}
+            {error instanceof Error ? error.message : "Gagal memuat data."}
           </div>
         ) : transactions.length === 0 ? (
           <div className="py-8 text-center text-slate-400 text-xs font-medium">
