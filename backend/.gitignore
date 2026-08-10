@@ -14,3 +14,12 @@ frontendReact/.vite/
 *.env
 .DS_Store
 Thumbs.db
+
+# File log & temporary Go / Air
+*.log
+*.exe~
+build-errors.
+
+# Abaikan semua isi folder tmp
+tmp/
+**/tmp/
