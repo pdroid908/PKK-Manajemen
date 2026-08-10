@@ -92,14 +92,23 @@ export default function Dashboard() {
   return (
     <div className="max-w-5xl mx-auto space-y-4 pb-12">
       {/* KONTEN UTAMA PENGUMUMAN */}
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20 text-emerald-600 space-y-3 bg-white rounded-3xl border border-emerald-100 shadow-sm">
-          <i className="fa-solid fa-spinner animate-spin text-2xl"></i>
-          <p className="text-xs font-semibold text-slate-400">
-            Sedang memuat informasi...
-          </p>
-        </div>
-      ) : !latestItem ? (
+{isLoading ? (
+  <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-5 sm:p-8 space-y-5 animate-pulse">
+    {/* Simulasi Header Badge & Title */}
+    <div className="space-y-3">
+      <div className="w-32 h-6 bg-emerald-100 rounded-xl"></div>
+      <div className="w-full h-8 bg-slate-200 rounded-xl"></div>
+      <div className="w-3/4 h-8 bg-slate-200 rounded-xl"></div>
+    </div>
+    {/* Simulasi Grid Tanggal */}
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div className="h-16 bg-amber-50/50 rounded-2xl"></div>
+      <div className="h-16 bg-emerald-50/50 rounded-2xl"></div>
+    </div>
+    {/* Simulasi Konten */}
+    <div className="h-48 bg-slate-100 rounded-2xl"></div>
+  </div>
+) : !latestItem ? (
         <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-10 text-center space-y-3">
           <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl mx-auto flex items-center justify-center text-xl shadow-inner">
             <i className="fa-solid fa-bullhorn"></i>
@@ -334,21 +343,21 @@ export default function Dashboard() {
             <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl transition">
               <i className="fa-solid fa-school text-emerald-400 text-base"></i>
               <span className="text-xs font-bold text-slate-200">
-                Madrasah Aliyah Negeri (MAN)
+                Madrasah MA'ARIF AL-MUTTAQIN
               </span>
             </div>
 
             <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl transition">
               <i className="fa-solid fa-building-columns text-emerald-400 text-base"></i>
               <span className="text-xs font-bold text-slate-200">
-                Pengurus RT/RW Setempat
+                Pengurus RT/RW TEMBORO KIDUL
               </span>
             </div>
 
             <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl transition">
               <i className="fa-solid fa-users-line text-emerald-400 text-base"></i>
               <span className="text-xs font-bold text-slate-200">
-                Karang Taruna Pemuda
+                Karang Taruna PERMAB
               </span>
             </div>
           </div>
