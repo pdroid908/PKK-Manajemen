@@ -62,37 +62,51 @@ export default function PublikWarga() {
           50% { transform: scale(1.03); opacity: 1; }
         }
 
-        /* Dibuat sangat pelan (70s - 90s) */
+        /* Dibuat sangat pelan dan bervariasi */
         .animate-marquee-slow-1 {
           display: flex;
           width: max-content;
           will-change: transform;
-          animation: marqueeLeft 120s linear infinite;
+          animation: marqueeLeft 180s linear infinite;
         }
         .animate-marquee-slow-2 {
           display: flex;
           width: max-content;
           will-change: transform;
-          animation: marqueeRight 115s linear infinite;
+          animation: marqueeRight 125s linear infinite;
         }
         .animate-marquee-slow-3 {
           display: flex;
           width: max-content;
           will-change: transform;
-          animation: marqueeLeft 110s linear infinite;
+          animation: marqueeLeft 130s linear infinite;
         }
         .animate-marquee-slow-4 {
           display: flex;
           width: max-content;
           will-change: transform;
-          animation: marqueeRight 140s linear infinite;
+          animation: marqueeRight 150s linear infinite;
+        }
+        .animate-marquee-slow-5 {
+          display: flex;
+          width: max-content;
+          will-change: transform;
+          animation: marqueeLeft 145s linear infinite;
+        }
+        .animate-marquee-slow-6 {
+          display: flex;
+          width: max-content;
+          will-change: transform;
+          animation: marqueeRight 135s linear infinite;
         }
 
         /* Saat disentuh di HP atau kursor di Laptop, jalanan berhenti agar gampang dibaca */
         .animate-marquee-slow-1:hover, .animate-marquee-slow-1:active,
         .animate-marquee-slow-2:hover, .animate-marquee-slow-2:active,
         .animate-marquee-slow-3:hover, .animate-marquee-slow-3:active,
-        .animate-marquee-slow-4:hover, .animate-marquee-slow-4:active {
+        .animate-marquee-slow-4:hover, .animate-marquee-slow-4:active,
+        .animate-marquee-slow-5:hover, .animate-marquee-slow-5:active,
+        .animate-marquee-slow-6:hover, .animate-marquee-slow-6:active {
           animation-play-state: paused;
         }
 
@@ -105,7 +119,7 @@ export default function PublikWarga() {
       <div className="absolute inset-0 pointer-events-none opacity-15 bg-[radial-gradient(#34d399_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
       {/* HEADER HALAMAN */}
-      <header className="relative z-10 text-center my-2 sm:my-3 space-y-1 shrink-0">
+      <header className="relative z-10 text-center my-1 sm:my-2 space-y-1 shrink-0">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[11px] sm:text-xs font-semibold backdrop-blur-md animate-glow">
           <i className="fa-solid fa-users text-amber-300"></i>
           <span>Daftar Warga Terdaftar</span>
@@ -119,14 +133,14 @@ export default function PublikWarga() {
         </p>
       </header>
 
-      {/* KONTEN UTAMA: 4 BARIS NAMA BERJALAN SANTAI */}
-      <main className="relative z-10 flex-1 flex flex-col justify-center my-2 py-1 min-h-[300px] overflow-hidden rounded-xl">
+      {/* KONTEN UTAMA: 6 BARIS NAMA BERJALAN SANTAI */}
+      <main className="relative z-10 flex-1 flex flex-col justify-center my-1 py-1 overflow-hidden rounded-xl">
         {/* GRADIENT OVERLAY DI KIRI DAN KANAN AGAR UJUNG TIKUNGAN PUDAR HALUS */}
         <div className="absolute top-0 bottom-0 left-0 w-3 sm:w-6 bg-gradient-to-r from-emerald-950 via-emerald-950/80 to-transparent z-20 pointer-events-none"></div>
         <div className="absolute top-0 bottom-0 right-0 w-3 sm:w-6 bg-gradient-to-l from-emerald-950 via-emerald-950/80 to-transparent z-20 pointer-events-none"></div>
 
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center space-y-2 text-emerald-300">
+          <div className="flex flex-col items-center justify-center space-y-2 text-emerald-300 py-12">
             <i className="fa-solid fa-spinner animate-spin text-3xl"></i>
             <p className="text-xs font-medium">Memuat data warga...</p>
           </div>
@@ -136,14 +150,14 @@ export default function PublikWarga() {
             <p className="text-xs sm:text-sm">Belum ada data warga untuk ditampilkan.</p>
           </div>
         ) : (
-          <div className="w-full space-y-2.5 sm:space-y-4 py-1">
+          <div className="w-full space-y-2 sm:space-y-2.5 py-1">
             {/* BARIS 1: Warna-warni Badge */}
             <div className="relative w-full overflow-hidden">
-              <div className="animate-marquee-slow-1 gap-2.5 sm:gap-4 pr-2.5 sm:pr-4">
+              <div className="animate-marquee-slow-1 gap-2 sm:gap-3 pr-2 sm:pr-3">
                 {loopList.map((item, idx) => (
                   <div
                     key={`track1-${item.id}-${idx}`}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl ${item.style.bg} ${item.style.text} ${item.style.border} border shadow-md shrink-0 font-bold text-xs sm:text-sm cursor-pointer`}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl ${item.style.bg} ${item.style.text} ${item.style.border} border shadow-md shrink-0 font-bold text-xs cursor-pointer`}
                   >
                     <span className="text-xs">{item.style.badge}</span>
                     <span>{item.nama}</span>
@@ -154,11 +168,11 @@ export default function PublikWarga() {
 
             {/* BARIS 2: Kaca Transparan Elegant */}
             <div className="relative w-full overflow-hidden">
-              <div className="animate-marquee-slow-2 gap-2.5 sm:gap-4 pr-2.5 sm:pr-4">
+              <div className="animate-marquee-slow-2 gap-2 sm:gap-3 pr-2 sm:pr-3">
                 {[...loopList].reverse().map((item, idx) => (
                   <div
                     key={`track2-${item.id}-${idx}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-white/10 text-white border border-white/20 shadow-md backdrop-blur-md shrink-0 font-semibold text-xs sm:text-sm cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-white/10 text-white border border-white/20 shadow-md backdrop-blur-md shrink-0 font-semibold text-xs cursor-pointer"
                   >
                     <i className={`fa-solid ${item.style.icon} text-amber-300 text-[10px]`}></i>
                     <span className="tracking-wide">{item.nama}</span>
@@ -170,32 +184,64 @@ export default function PublikWarga() {
 
             {/* BARIS 3: Highlight Mahkota Ibu Warga */}
             <div className="relative w-full overflow-hidden">
-              <div className="animate-marquee-slow-3 gap-2.5 sm:gap-4 pr-2.5 sm:pr-4">
+              <div className="animate-marquee-slow-3 gap-2 sm:gap-3 pr-2 sm:pr-3">
                 {loopList.map((item, idx) => (
                   <div
                     key={`track3-${item.id}-${idx}`}
-                    className="inline-flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-gradient-to-r from-amber-400 to-rose-400 text-zinc-900 border border-amber-200 shadow-md shrink-0 font-extrabold text-xs sm:text-sm cursor-pointer"
+                    className="inline-flex items-center gap-2 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-gradient-to-r from-amber-400 to-rose-400 text-zinc-900 border border-amber-200 shadow-md shrink-0 font-extrabold text-xs cursor-pointer"
                   >
-                    <span className="w-4 h-4 rounded-full bg-white/90 flex items-center justify-center text-[10px]">
+                    <span className="w-3.5 h-3.5 rounded-full bg-white/90 flex items-center justify-center text-[9px]">
                       ⭐
                     </span>
-                    <span> {item.nama}</span>
+                    <span>{item.nama}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* BARIS 4 (TAMBAHAN): Fresh Teal & Mint Badge */}
+            {/* BARIS 4: Fresh Teal & Mint Badge */}
             <div className="relative w-full overflow-hidden">
-              <div className="animate-marquee-slow-4 gap-2.5 sm:gap-4 pr-2.5 sm:pr-4">
+              <div className="animate-marquee-slow-4 gap-2 sm:gap-3 pr-2 sm:pr-3">
                 {[...loopList].reverse().map((item, idx) => (
                   <div
                     key={`track4-${item.id}-${idx}`}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-teal-500/80 text-teal-950 border border-teal-300/60 shadow-md shrink-0 font-extrabold text-xs sm:text-sm cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-teal-500/80 text-teal-950 border border-teal-300/60 shadow-md shrink-0 font-extrabold text-xs cursor-pointer"
                   >
                     <i className="fa-solid fa-leaf text-emerald-900 text-[10px]"></i>
                     <span>{item.nama}</span>
                     <span className="text-[10px]">✨</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* BARIS 5 (BARU): Indigo & Violet Theme */}
+            <div className="relative w-full overflow-hidden">
+              <div className="animate-marquee-slow-5 gap-2 sm:gap-3 pr-2 sm:pr-3">
+                {loopList.map((item, idx) => (
+                  <div
+                    key={`track5-${item.id}-${idx}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-indigo-600/90 text-white border border-indigo-300/50 shadow-md shrink-0 font-bold text-xs cursor-pointer"
+                  >
+                    <i className="fa-solid fa-shield-heart text-amber-300 text-[10px]"></i>
+                    <span>{item.nama}</span>
+                    <span className="text-[10px]">💎</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* BARIS 6 (BARU): Warm Orange & Yellow Theme */}
+            <div className="relative w-full overflow-hidden">
+              <div className="animate-marquee-slow-6 gap-2 sm:gap-3 pr-2 sm:pr-3">
+                {[...loopList].reverse().map((item, idx) => (
+                  <div
+                    key={`track6-${item.id}-${idx}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl bg-orange-500/90 text-white border border-orange-300/50 shadow-md shrink-0 font-bold text-xs cursor-pointer"
+                  >
+                    <i className="fa-solid fa-sun text-yellow-200 text-[10px]"></i>
+                    <span>{item.nama}</span>
+                    <span className="text-[10px]">🌻</span>
                   </div>
                 ))}
               </div>
@@ -205,7 +251,7 @@ export default function PublikWarga() {
       </main>
 
       {/* FOOTER INFORMASI */}
-      <footer className="relative z-10 text-center py-2 border-t border-emerald-500/20 text-[10px] sm:text-xs text-emerald-300/80 flex flex-col sm:flex-row items-center justify-between gap-1 shrink-0">
+      <footer className="relative z-10 text-center py-1.5 border-t border-emerald-500/20 text-[10px] sm:text-xs text-emerald-300/80 flex flex-col sm:flex-row items-center justify-between gap-1 shrink-0">
         <div className="flex items-center gap-1.5">
           <i className="fa-solid fa-shield-halved text-emerald-400"></i>
           <span>Data aman &amp; terjaga privasinya</span>
