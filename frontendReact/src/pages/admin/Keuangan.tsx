@@ -526,60 +526,60 @@ export default function Keuangan() {
       </div>
 
       {/* RINGKASAN SALDO */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
         {/* SALDO KAS */}
-        <div className="bg-gradient-to-br from-white to-emerald-50/40 p-5 rounded-2xl border border-emerald-200/80 shadow-md flex items-center justify-between hover:shadow-lg transition-all">
+        <div className="bg-gradient-to-br from-white to-emerald-50/40 px-3.5 py-2.5 sm:p-5 rounded-2xl border border-emerald-200/80 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
           <div>
-            <p className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
+            <p className="text-[9px] sm:text-[11px] font-bold text-emerald-800 uppercase tracking-wider">
               Saldo Kas Saat Ini
             </p>
-            <h3 className="text-lg sm:text-2xl font-black text-emerald-700 mt-1">
+            <h3 className="text-sm sm:text-2xl font-black text-emerald-700 mt-0.5">
               {isFetchingInitial ? (
-                <div className="h-7 w-28 bg-emerald-100/60 rounded-md animate-pulse mt-1"></div>
+                <div className="h-5 sm:h-7 w-24 sm:w-28 bg-emerald-100/60 rounded-md animate-pulse mt-0.5"></div>
               ) : (
                 formatRupiah(currentBalance)
               )}
             </h3>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0">
+          <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-xs sm:text-xl font-bold shadow-xs shrink-0">
             <i className="fa-solid fa-vault"></i>
           </div>
         </div>
 
         {/* TOTAL PEMASUKAN */}
-        <div className="bg-gradient-to-br from-white to-teal-50/40 p-5 rounded-2xl border border-teal-200/80 shadow-md flex items-center justify-between hover:shadow-lg transition-all">
+        <div className="bg-gradient-to-br from-white to-teal-50/40 px-3.5 py-2.5 sm:p-5 rounded-2xl border border-teal-200/80 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
           <div>
-            <p className="text-[11px] font-bold text-teal-800 uppercase tracking-wider">
+            <p className="text-[9px] sm:text-[11px] font-bold text-teal-800 uppercase tracking-wider">
               Total Pemasukan
             </p>
-            <h3 className="text-lg sm:text-2xl font-black text-teal-600 mt-1">
+            <h3 className="text-sm sm:text-2xl font-black text-teal-600 mt-0.5">
               {isFetchingInitial ? (
-                <div className="h-7 w-28 bg-teal-100/60 rounded-md animate-pulse mt-1"></div>
+                <div className="h-5 sm:h-7 w-24 sm:w-28 bg-teal-100/60 rounded-md animate-pulse mt-0.5"></div>
               ) : (
                 formatRupiah(totalIncome)
               )}
             </h3>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0">
+          <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center text-xs sm:text-xl font-bold shadow-xs shrink-0">
             <i className="fa-solid fa-arrow-down"></i>
           </div>
         </div>
 
         {/* TOTAL PENGELUARAN */}
-        <div className="bg-gradient-to-br from-white to-rose-50/40 p-5 rounded-2xl border border-rose-200/80 shadow-md flex items-center justify-between hover:shadow-lg transition-all">
+        <div className="bg-gradient-to-br from-white to-rose-50/40 px-3.5 py-2.5 sm:p-5 rounded-2xl border border-rose-200/80 shadow-sm flex items-center justify-between hover:shadow-md transition-all">
           <div>
-            <p className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">
+            <p className="text-[9px] sm:text-[11px] font-bold text-rose-800 uppercase tracking-wider">
               Total Pengeluaran
             </p>
-            <h3 className="text-lg sm:text-2xl font-black text-rose-600 mt-1">
+            <h3 className="text-sm sm:text-2xl font-black text-rose-600 mt-0.5">
               {isFetchingInitial ? (
-                <div className="h-7 w-28 bg-rose-100/60 rounded-md animate-pulse mt-1"></div>
+                <div className="h-5 sm:h-7 w-24 sm:w-28 bg-rose-100/60 rounded-md animate-pulse mt-0.5"></div>
               ) : (
                 formatRupiah(totalExpense)
               )}
             </h3>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0">
+          <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center text-xs sm:text-xl font-bold shadow-xs shrink-0">
             <i className="fa-solid fa-arrow-up"></i>
           </div>
         </div>

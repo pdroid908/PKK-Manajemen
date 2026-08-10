@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo, type FormEvent } from "react";
+import { useState, useMemo, type FormEvent } from "react";
 import * as XLSX from "xlsx";
 import { apiFetch } from "../../lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface WargaItem {
   id: string;
@@ -18,6 +19,8 @@ interface NotificationState {
 }
 
 export default function WargaManagement() {
+  const queryClient = useQueryClient();
+
   const [downloadExcelModal, setDownloadExcelModal] = useState<boolean>(false);
 
   // State Form Input Warga
@@ -29,17 +32,20 @@ export default function WargaManagement() {
   const [filterAktifOnly, setFilterAktifOnly] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  // Loading States
-  const [isCreating, setIsCreating] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isFetchingInitial, setIsFetchingInitial] = useState<boolean>(true);
-
-  const [items, setItems] = useState<WargaItem[]>([]);
-
   // Modal States
   const [createModal, setCreateModal] = useState<boolean>(false);
   const [deleteModal, setDeleteModal] = useState<{
+    show: boolean;
+    id: string | null;
+    nama: string;
+  }>({
+    show: false,
+    id: null,
+    nama: "",
+  });
+
+  // NEW: State Modal Konfirmasi Aktifkan
+  const [restoreModal, setRestoreModal] = useState<{
     show: boolean;
     id: string | null;
     nama: string;
@@ -63,9 +69,10 @@ export default function WargaManagement() {
     }, 3500);
   };
 
-  // 1. Fetch Data Warga
-  const fetchWarga = async () => {
-    try {
+  // 1. Fetch Data Warga dengan TanStack Query
+  const { data: items = [], isLoading: isFetchingInitial } = useQuery<WargaItem[]>({
+    queryKey: ["warga-data", filterAktifOnly],
+    queryFn: async () => {
       const endpoint = filterAktifOnly ? "/warga/data?aktif=true" : "/warga/data";
       const response = await apiFetch(endpoint);
 
@@ -78,75 +85,24 @@ export default function WargaManagement() {
         throw new Error("Respon server tidak valid.");
       }
 
-      if (Array.isArray(result.data)) {
-        setItems(result.data);
-      } else {
-        setItems([]);
-      }
-    } catch (error: unknown) {
-      console.error("Gagal mengambil data warga:", error);
-      showToast(error instanceof Error ? error.message : "Gagal memuat data warga.", "error");
-    } finally {
-      setIsFetchingInitial(false);
-    }
-  };
-
-  useEffect(() => {
-    void fetchWarga();
-  }, [filterAktifOnly]);
-
-  // Filtering Data berdasarkan Search Query dan Abjad
- const filteredItems = useMemo(() => {
-  return items.filter((item) => {
-    return (
-      item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.rt_rw.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.no_hp && item.no_hp.includes(searchQuery))
-    );
+      return Array.isArray(result.data) ? result.data : [];
+    },
   });
-}, [items, searchQuery]); 
-    // Handler Aktifkan Kembali
-const handleRestore = async (id: string) => {
-  try {
-    const response = await apiFetch(`/warga/restore/${id}`, { method: "PUT" });
-    if (response.ok) {
-      await fetchWarga();
-      showToast("Warga berhasil diaktifkan kembali!", "success");
-    }
-  } catch (error) {
-    showToast("Gagal mengaktifkan warga.", "error");
-  }
-};
 
-// Handler Hapus Permanen
-const handleHardDelete = async (id: string) => {
-  if (!confirm("Apakah Anda yakin ingin menghapus PERMANEN data ini? Data tidak bisa dikembalikan!")) return;
-  try {
-    const response = await apiFetch(`/warga/delete/${id}`, { method: "DELETE" });
-    if (response.ok) {
-      await fetchWarga();
-      showToast("Data warga berhasil dihapus permanen!", "success");
-    }
-  } catch (error) {
-    showToast("Gagal menghapus data secara permanen.", "error");
-  }
-};
+  // Filtering Data berdasarkan Search Query
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => {
+      return (
+        item.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.rt_rw.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (item.no_hp && item.no_hp.includes(searchQuery))
+      );
+    });
+  }, [items, searchQuery]);
 
-  const handleOpenCreateModal = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!nama) {
-      showToast("Nama warga wajib diisi!", "error");
-      return;
-    }
-    setCreateModal(true);
-  };
-
-  // 2. Eksekusi Tambah Data Warga (POST /warga/add)
-  const handleConfirmCreate = async () => {
-    setCreateModal(false);
-    setIsCreating(true);
-
-    try {
+  // 2. Mutation Tambah Warga
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const payload = {
         nama: nama,
         rt_rw: rtRw || "RT 01/RW 01",
@@ -164,47 +120,29 @@ const handleHardDelete = async (id: string) => {
         throw new Error("Respon server tidak valid.");
       }
 
-      if (response.ok) {
-        setNama("");
-        setRtRw("");
-        setNoHp("");
-
-        await fetchWarga();
-        showToast("Warga berhasil ditambahkan!", "success");
-      } else {
-        showToast("Gagal menyimpan: " + (result.error || "Terjadi kesalahan"), "error");
+      if (!response.ok) {
+        throw new Error("Gagal menyimpan: " + (result.error || "Terjadi kesalahan"));
       }
-    } catch (error: unknown) {
+
+      return result;
+    },
+    onSuccess: () => {
+      setNama("");
+      setRtRw("");
+      setNoHp("");
+      showToast("Warga berhasil ditambahkan!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["warga-data"] });
+    },
+    onError: (error: unknown) => {
       console.error("Submit Error:", error);
       showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
-    } finally {
-      setIsCreating(false);
-    }
-  };
+    },
+  });
 
-  // 3. Refresh Data & Invalidate Cache (POST /warga/refresh)
-  const handleRefreshWarga = async () => {
-    setIsRefreshing(true);
-    try {
-      await apiFetch("/warga/refresh", { method: "POST" });
-      await fetchWarga();
-      showToast("Cache dibersihkan & data warga diperbarui!", "success");
-    } catch (error) {
-      console.error("Gagal memicu refresh backend:", error);
-      showToast("Gagal menyinkronkan data.", "error");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  // 4. Eksekusi Soft Delete (FIX: PUT /warga/update/:id)
-  const handleDeleteConfirm = async () => {
-    if (!deleteModal.id) return;
-    setIsDeleting(true);
-
-    try {
-      // PERBAIKAN: Menggunakan URL parameter sesuai r.PUT("/warga/update/:id")
-      const response = await apiFetch(`/warga/update/${deleteModal.id}`, {
+  // 3. Mutation Soft Delete Warga (PUT /warga/update/:id)
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/warga/update/${id}`, {
         method: "PUT",
       });
 
@@ -213,19 +151,102 @@ const handleHardDelete = async (id: string) => {
         throw new Error("Respon server tidak valid.");
       }
 
-      if (response.ok) {
-        setDeleteModal({ show: false, id: null, nama: "" });
-        await fetchWarga();
-        showToast("Status warga berhasil dinonaktifkan!", "success");
-      } else {
-        showToast("Gagal mengubah status: " + (result.error || "Terjadi kesalahan"), "error");
+      if (!response.ok) {
+        throw new Error("Gagal mengubah status: " + (result.error || "Terjadi kesalahan"));
       }
-    } catch (error: unknown) {
+
+      return result;
+    },
+    onSuccess: () => {
+      setDeleteModal({ show: false, id: null, nama: "" });
+      showToast("Status warga berhasil dinonaktifkan!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["warga-data"] });
+    },
+    onError: (error: unknown) => {
       console.error("Error soft deleting item:", error);
       showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
-    } finally {
-      setIsDeleting(false);
+    },
+  });
+
+  // 4. Mutation Refresh Data & Invalidate Cache (POST /warga/refresh)
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      await apiFetch("/warga/refresh", { method: "POST" });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warga-data"] });
+      showToast("Cache dibersihkan & data warga diperbarui!", "success");
+    },
+    onError: (error) => {
+      console.error("Gagal memicu refresh backend:", error);
+      showToast("Gagal menyinkronkan data.", "error");
+    },
+  });
+
+  // 5. Mutation Restore Warga Aktif Kembali
+  const restoreMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/warga/restore/${id}`, { method: "PUT" });
+      if (!response.ok) {
+        throw new Error("Gagal mengaktifkan warga.");
+      }
+      return response;
+    },
+    onSuccess: () => {
+      setRestoreModal({ show: false, id: null, nama: "" });
+      void queryClient.invalidateQueries({ queryKey: ["warga-data"] });
+      showToast("Warga berhasil diaktifkan kembali!", "success");
+    },
+    onError: () => {
+      showToast("Gagal mengaktifkan warga.", "error");
+    },
+  });
+
+  // 6. Mutation Hard Delete
+  const hardDeleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiFetch(`/warga/delete/${id}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Gagal menghapus data secara permanen.");
+      }
+      return response;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["warga-data"] });
+      showToast("Data warga berhasil dihapus permanen!", "success");
+    },
+    onError: () => {
+      showToast("Gagal menghapus data secara permanen.", "error");
+    },
+  });
+
+  const handleRestoreConfirm = () => {
+    if (!restoreModal.id) return;
+    restoreMutation.mutate(restoreModal.id);
+  };
+
+  const handleHardDelete = (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus PERMANEN data ini? Data tidak bisa dikembalikan!")) return;
+    hardDeleteMutation.mutate(id);
+  };
+
+  const handleOpenCreateModal = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!nama) {
+      showToast("Nama warga wajib diisi!", "error");
+      return;
     }
+    setCreateModal(true);
+  };
+
+  const handleConfirmCreate = () => {
+    setCreateModal(false);
+    createMutation.mutate();
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deleteModal.id) return;
+    deleteMutation.mutate(deleteModal.id);
   };
 
   // Export Excel
@@ -345,7 +366,7 @@ const handleHardDelete = async (id: string) => {
         </div>
       )}
 
-      {/* MODAL KONFIRMASI DELETE */}
+      {/* MODAL KONFIRMASI DELETE (NONAKTIFKAN) */}
       {deleteModal.show && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-rose-100 space-y-4">
@@ -362,7 +383,7 @@ const handleHardDelete = async (id: string) => {
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={() => setDeleteModal({ show: false, id: null, nama: "" })}
                 className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs sm:text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
               >
@@ -370,17 +391,60 @@ const handleHardDelete = async (id: string) => {
               </button>
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={handleDeleteConfirm}
                 className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                {isDeleting ? (
+                {deleteMutation.isPending ? (
                   <>
                     <i className="fa-solid fa-spinner animate-spin"></i>
                     Memproses...
                   </>
                 ) : (
                   "Ya, Nonaktifkan"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW: MODAL KONFIRMASI AKTIFKAN (RESTORE) */}
+      {restoreModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-emerald-100 space-y-4">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <i className="fa-solid fa-user-check text-lg"></i>
+              </div>
+              <h3 className="text-base sm:text-lg font-bold text-zinc-900">Konfirmasi Aktifkan Warga</h3>
+            </div>
+            <p className="text-xs sm:text-sm text-zinc-600 leading-relaxed">
+              Apakah Anda yakin ingin mengaktifkan kembali warga{" "}
+              <strong className="text-zinc-900">"{restoreModal.nama}"</strong>? Statusnya akan berubah menjadi Aktif.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={restoreMutation.isPending}
+                onClick={() => setRestoreModal({ show: false, id: null, nama: "" })}
+                className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-xs sm:text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={restoreMutation.isPending}
+                onClick={handleRestoreConfirm}
+                className="px-3.5 py-1.5 sm:px-4 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {restoreMutation.isPending ? (
+                  <>
+                    <i className="fa-solid fa-spinner animate-spin"></i>
+                    Memproses...
+                  </>
+                ) : (
+                  "Ya, Aktifkan"
                 )}
               </button>
             </div>
@@ -400,12 +464,12 @@ const handleHardDelete = async (id: string) => {
           </button>
 
           <button
-            onClick={handleRefreshWarga}
-            disabled={isRefreshing}
+            onClick={() => refreshMutation.mutate()}
+            disabled={refreshMutation.isPending}
             className="p-1.5 sm:p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
           >
-            <i className={`fa-solid fa-rotate ${isRefreshing ? "animate-spin" : ""}`}></i>
-            {isRefreshing ? "Memuat..." : "Muat Ulang"}
+            <i className={`fa-solid fa-rotate ${refreshMutation.isPending ? "animate-spin" : ""}`}></i>
+            {refreshMutation.isPending ? "Memuat..." : "Muat Ulang"}
           </button>
         </div>
 
@@ -439,7 +503,7 @@ const handleHardDelete = async (id: string) => {
       </div>
 
       <div className="flex flex-col gap-5 sm:gap-8 max-w-5xl mx-auto">
-        {/* PANEL INPUT WARGA (LEBIH RINGKAS DI MOBILE) */}
+        {/* PANEL INPUT WARGA */}
         <div className="bg-white rounded-2xl border border-emerald-200/80 shadow-xs p-4 sm:p-6">
           <div className="flex items-center gap-2.5 mb-4 pb-3 border-b border-emerald-100">
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold shrink-0 shadow-xs text-sm sm:text-base">
@@ -496,10 +560,10 @@ const handleHardDelete = async (id: string) => {
 
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={createMutation.isPending}
               className="w-full mt-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              {isCreating ? (
+              {createMutation.isPending ? (
                 <>
                   <i className="fa-solid fa-spinner animate-spin"></i>
                   Menyimpan ke Database...
@@ -610,39 +674,39 @@ const handleHardDelete = async (id: string) => {
                     </div>
                   </div>
 
-                  {/* ACTION BUTTON (LEBIH TIPIS / RINGKAS) */}
+                  {/* ACTION BUTTON */}
                   <div className="w-full sm:w-auto flex items-center justify-end gap-2 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-emerald-100/60">
-  {item.is_aktif ? (
-    <button
-      type="button"
-      onClick={() => setDeleteModal({ show: true, id: item.id, nama: item.nama })}
-      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors cursor-pointer"
-    >
-      <i className="fa-solid fa-user-slash"></i>
-      Nonaktifkan
-    </button>
-  ) : (
-    <>
-      <button
-        type="button"
-        onClick={() => handleRestore(item.id)}
-        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
-      >
-        <i className="fa-solid fa-user-check"></i>
-        Aktifkan
-      </button>
+                    {item.is_aktif ? (
+                      <button
+                        type="button"
+                        onClick={() => setDeleteModal({ show: true, id: item.id, nama: item.nama })}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition-colors cursor-pointer"
+                      >
+                        <i className="fa-solid fa-user-slash"></i>
+                        Nonaktifkan
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setRestoreModal({ show: true, id: item.id, nama: item.nama })}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors cursor-pointer"
+                        >
+                          <i className="fa-solid fa-user-check"></i>
+                          Aktifkan
+                        </button>
 
-      <button
-        type="button"
-        onClick={() => handleHardDelete(item.id)}
-        className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 text-rose-600 border border-zinc-200 text-xs font-semibold hover:bg-rose-50 transition-colors cursor-pointer"
-        title="Hapus Permanen"
-      >
-        <i className="fa-solid fa-trash-can"></i>
-      </button>
-    </>
-  )}
-</div>
+                        <button
+                          type="button"
+                          onClick={() => handleHardDelete(item.id)}
+                          className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-100 text-rose-600 border border-zinc-200 text-xs font-semibold hover:bg-rose-50 transition-colors cursor-pointer"
+                          title="Hapus Permanen"
+                        >
+                          <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
