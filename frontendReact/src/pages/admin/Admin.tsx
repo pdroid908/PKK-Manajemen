@@ -1,6 +1,7 @@
-import { useEffect, useState, type DragEvent, type FormEvent } from "react";
+import {  useState, type DragEvent, type FormEvent } from "react";
 import * as XLSX from "xlsx";
 import { apiFetch } from "../../lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface PostItem {
   id: number | string;
@@ -29,6 +30,8 @@ interface NotificationState {
 }
 
 export default function AdminDashboard() {
+  const queryClient = useQueryClient();
+
   const [downloadExcelModal, setDownloadExcelModal] = useState<boolean>(false);
   const [title, setTitle] = useState<string>("");
   const [date, setDate] = useState<string>("");
@@ -40,12 +43,7 @@ export default function AdminDashboard() {
   // State File & Loading Per-Proses
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
-  const [isCreating, setIsCreating] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isFetchingInitial, setIsFetchingInitial] = useState<boolean>(true);
-
-  const [items, setItems] = useState<PostItem[]>([]);
 
   // Modal States
   const [createModal, setCreateModal] = useState<boolean>(false);
@@ -76,9 +74,10 @@ export default function AdminDashboard() {
     }, 3500);
   };
 
-  // Helper untuk Ambil Data Pengumuman
-  const fetchPengumuman = async () => {
-    try {
+  // 1. FETCH DATA PENGUMUMAN DENGAN REACT QUERY[cite: 20]
+  const { data: items = [], isLoading: isFetchingInitial } = useQuery<PostItem[]>({
+    queryKey: ["admin-pengumuman"],
+    queryFn: async () => {
       const response = await apiFetch("/admin/pengumuman");
       if (!response.ok) {
         throw new Error(`Server error (${response.status})`);
@@ -90,7 +89,7 @@ export default function AdminDashboard() {
       }
 
       if (Array.isArray(result.data)) {
-        const mappedData: PostItem[] = result.data.map((item: PengumumanApiItem) => ({
+        return result.data.map((item: PengumumanApiItem) => ({
           id: item.id,
           title: item.title,
           date: item.event_date,
@@ -99,65 +98,90 @@ export default function AdminDashboard() {
           description: item.description,
           image: item.image_name || undefined,
         }));
-        setItems(mappedData);
-      } else {
-        setItems([]);
       }
-    } catch (error: unknown) {
-      console.error("Gagal mengambil data pengumuman:", error);
-      showToast(error instanceof Error ? error.message : "Gagal memuat data pengumuman.", "error");
-    } finally {
-      setIsFetchingInitial(false);
-    }
-  };
+      return [];
+    },
+  });
 
-  useEffect(() => {
-    let isMounted = true;
+  // 2. MUTATION TAMBAH PENGUMUMAN DENGAN REACT QUERY[cite: 20]
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const combinedTime = `${startTime} - ${endTime}`;
+      const formData = new FormData();
+      formData.append("title", title);
+      formData.append("event_date", date);
+      formData.append("event_time", combinedTime);
+      formData.append("location", location);
+      formData.append("description", description);
 
-    const loadPengumuman = async () => {
-      try {
-        const response = await apiFetch("/admin/pengumuman");
-        if (!response.ok) {
-          throw new Error(`Server error (${response.status})`);
-        }
-
-        const result: { data?: PengumumanApiItem[] } | null = await response.json().catch(() => null);
-        if (!result) {
-          throw new Error("Respon server tidak valid.");
-        }
-
-        if (isMounted && Array.isArray(result.data)) {
-          const mappedData: PostItem[] = result.data.map((item: PengumumanApiItem) => ({
-            id: item.id,
-            title: item.title,
-            date: item.event_date,
-            time: item.event_time,
-            location: item.location,
-            description: item.description,
-            image: item.image_name || undefined,
-          }));
-          setItems(mappedData);
-        } else if (isMounted) {
-          setItems([]);
-        }
-      } catch (error: unknown) {
-        if (isMounted) {
-          console.error("Gagal mengambil data pengumuman:", error);
-          showToast(error instanceof Error ? error.message : "Gagal memuat data pengumuman.", "error");
-        }
-      } finally {
-        if (isMounted) {
-          setIsFetchingInitial(false);
-        }
+      if (selectedFile) {
+        formData.append("image", selectedFile);
       }
-    };
 
-    void loadPengumuman();
+      const response = await apiFetch("/admin/add/dashboard", {
+        method: "POST",
+        body: formData,
+      });
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      const result: { error?: string } | null = await response.json().catch(() => null);
+      if (!result) {
+        throw new Error("Respon server tidak valid.");
+      }
+
+      if (!response.ok) {
+        throw new Error("Gagal menyimpan: " + (result.error || "Terjadi kesalahan"));
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      setTitle("");
+      setDate("");
+      setStartTime("");
+      setEndTime("");
+      setLocation("");
+      setDescription("");
+      setSelectedFile(null);
+
+      showToast("Berhasil menambahkan pengumuman baru!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["admin-pengumuman"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Submit Error:", error);
+      showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
+    },
+  });
+
+  // 3. MUTATION HAPUS PENGUMUMAN DENGAN REACT QUERY[cite: 20]
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number | string) => {
+      const response = await apiFetch("/admin/delet", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(id) }),
+      });
+
+      const result: { error?: string; err?: string } | null = await response.json().catch(() => null);
+      if (!result) {
+        throw new Error("Respon server tidak valid.");
+      }
+
+      if (!response.ok) {
+        throw new Error("Gagal menghapus: " + (result.error || result.err || "Terjadi kesalahan"));
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      setDeleteModal({ show: false, id: null, title: "" });
+      showToast("Pengumuman berhasil dihapus!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["admin-pengumuman"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Error deleting item:", error);
+      showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
+    },
+  });
 
   // Handlers Drag & Drop Foto
   const handleDragOver = (e: DragEvent<HTMLLabelElement>) => {
@@ -196,62 +220,17 @@ export default function AdminDashboard() {
     setCreateModal(true);
   };
 
-  // 1. Eksekusi Tambah Data (dengan Loading State)
-  const handleConfirmCreate = async () => {
+  const handleConfirmCreate = () => {
     setCreateModal(false);
-    setIsCreating(true);
-
-    try {
-      const combinedTime = `${startTime} - ${endTime}`;
-      const formData = new FormData();
-      formData.append("title", title);
-      formData.append("event_date", date);
-      formData.append("event_time", combinedTime);
-      formData.append("location", location);
-      formData.append("description", description);
-
-      if (selectedFile) {
-        formData.append("image", selectedFile);
-      }
-
-      const response = await apiFetch("/admin/add/dashboard", {
-        method: "POST",
-        body: formData,
-      });
-
-      const result: { error?: string } | null = await response.json().catch(() => null);
-      if (!result) {
-        throw new Error("Respon server tidak valid.");
-      }
-
-      if (response.ok) {
-        setTitle("");
-        setDate("");
-        setStartTime("");
-        setEndTime("");
-        setLocation("");
-        setDescription("");
-        setSelectedFile(null);
-
-        await fetchPengumuman();
-        showToast("Berhasil menambahkan pengumuman baru!", "success");
-      } else {
-        showToast("Gagal menyimpan: " + (result.error || "Terjadi kesalahan"), "error");
-      }
-    } catch (error: unknown) {
-      console.error("Submit Error:", error);
-      showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
-    } finally {
-      setIsCreating(false);
-    }
+    createMutation.mutate();
   };
 
-  // 2. Refresh Data (dengan Spin Animation State)
+  // Refresh Data
   const handleRefreshPengumuman = async () => {
     setIsRefreshing(true);
     try {
       await apiFetch("/pengumuman/refresh");
-      await fetchPengumuman();
+      await queryClient.invalidateQueries({ queryKey: ["admin-pengumuman"] });
       showToast("Data berhasil diperbarui!", "success");
     } catch (error) {
       console.error("Gagal memicu refresh backend:", error);
@@ -261,36 +240,9 @@ export default function AdminDashboard() {
     }
   };
 
-  // 3. Eksekusi Hapus Data (dengan Loading State & Tahan Modal)
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = () => {
     if (!deleteModal.id) return;
-    setIsDeleting(true);
-
-    try {
-      const response = await apiFetch("/admin/delet", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: Number(deleteModal.id) }),
-      });
-
-      const result: { error?: string; err?: string } | null = await response.json().catch(() => null);
-      if (!result) {
-        throw new Error("Respon server tidak valid.");
-      }
-
-      if (response.ok) {
-        setDeleteModal({ show: false, id: null, title: "" });
-        await fetchPengumuman();
-        showToast("Pengumuman berhasil dihapus!", "success");
-      } else {
-        showToast("Gagal menghapus: " + (result.error || result.err || "Terjadi kesalahan"), "error");
-      }
-    } catch (error: unknown) {
-      console.error("Error deleting item:", error);
-      showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
-    } finally {
-      setIsDeleting(false);
-    }
+    deleteMutation.mutate(deleteModal.id);
   };
 
   // Export Excel
@@ -428,7 +380,7 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={() => setDeleteModal({ show: false, id: null, title: "" })}
                 className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
               >
@@ -436,11 +388,11 @@ export default function AdminDashboard() {
               </button>
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={handleDeleteConfirm}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
-                {isDeleting ? (
+                {deleteMutation.isPending ? (
                   <>
                     <i className="fa-solid fa-spinner animate-spin"></i>
                     Menghapus...
@@ -650,10 +602,10 @@ export default function AdminDashboard() {
 
             <button
               type="submit"
-              disabled={isCreating}
+              disabled={createMutation.isPending}
               className="w-full mt-3 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
             >
-              {isCreating ? (
+              {createMutation.isPending ? (
                 <>
                   <i className="fa-solid fa-spinner animate-spin"></i>
                   Mengunggah ke Storage & DB...
@@ -747,7 +699,7 @@ export default function AdminDashboard() {
                   <div className="flex sm:flex-col gap-2 w-full sm:w-auto sm:items-end">
                     <button
                       type="button"
-                      disabled={isDeleting}
+                      disabled={deleteMutation.isPending}
                       onClick={() =>
                         setDeleteModal({
                           show: true,

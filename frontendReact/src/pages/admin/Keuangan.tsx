@@ -1,7 +1,7 @@
-import { useEffect, useState, type DragEvent, type FormEvent } from "react";
+import { useState, type DragEvent, type FormEvent } from "react";
 import * as XLSX from "xlsx";
 import { apiFetch, apiUrl } from "../../lib/api";
-// URL Public Supabase digunakan hanya untuk melihat gambar nota
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface FinanceTransaction {
   id: number;
@@ -36,20 +36,32 @@ const getRawAmount = (val: string) => {
 };
 
 export default function Keuangan() {
+  const queryClient = useQueryClient();
+
   const [title, setTitle] = useState<string>("");
   const [type, setType] = useState<"INCOME" | "EXPENSE">("INCOME");
   const [amount, setAmount] = useState<string>("");
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  const [isFetching, setIsFetching] = useState<boolean>(true);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isDeleting, setIsDeleting] = useState<boolean>(false);
-
-  const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
-
+  // Modal States
   const [createModal, setCreateModal] = useState<boolean>(false);
+  const [downloadExcelModal, setDownloadExcelModal] = useState<boolean>(false);
+  
+  // State Modal Detail Deskripsi (jika teks terlalu panjang)
+  const [detailModal, setDetailModal] = useState<{
+    show: boolean;
+    title: string;
+    description: string;
+    date: string;
+  }>({
+    show: false,
+    title: "",
+    description: "",
+    date: "",
+  });
 
   const [deleteModal, setDeleteModal] = useState<{
     show: boolean;
@@ -67,7 +79,107 @@ export default function Keuangan() {
     type: "success",
   });
 
-  const [downloadExcelModal, setDownloadExcelModal] = useState<boolean>(false);
+  const showToast = (
+    message: string,
+    type: "success" | "error" = "success",
+  ) => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification((prev) => ({ ...prev, show: false }));
+    }, 3500);
+  };
+
+  // 1. FETCH DATA KEUANGAN DENGAN REACT QUERY
+  const { data: transactions = [], isLoading: isFetchingInitial } = useQuery<FinanceTransaction[]>({
+    queryKey: ["admin-keuangan"],
+    queryFn: async () => {
+      const response = await apiFetch("/admin/data/amount");
+      if (!response.ok) {
+        throw new Error(`Server error (${response.status})`);
+      }
+
+      const result: FinanceResponse | null = await response.json().catch(() => null);
+      if (!result) {
+        throw new Error("Respon server tidak valid.");
+      }
+
+      return Array.isArray(result.data) ? result.data : [];
+    },
+  });
+
+  // 2. MUTATION TAMBAH TRANSAKSI DENGAN REACT QUERY
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const numAmount = getRawAmount(amount);
+      const formData = new FormData();
+      formData.append("title", title.trim());
+      formData.append("type", type);
+      formData.append("amount", String(numAmount));
+
+      if (selectedFile instanceof File) {
+        formData.append("proof_image", selectedFile, selectedFile.name);
+      }
+
+      const response = await apiFetch("/admin/amount", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result: { error?: string } | null = await response.json().catch(() => null);
+      if (!result) {
+        throw new Error("Respon server tidak valid.");
+      }
+
+      if (!response.ok) {
+        throw new Error("Gagal menyimpan: " + (result.error || "Terjadi kesalahan"));
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      setTitle("");
+      setAmount("");
+      setSelectedFile(null);
+      setType("INCOME");
+      showToast("Berhasil menambahkan catatan keuangan!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["admin-keuangan"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Submit Error:", error);
+      showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
+    },
+  });
+
+  // 3. MUTATION HAPUS TRANSAKSI DENGAN REACT QUERY
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await apiFetch("/admin/data/amount", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(id) }),
+      });
+
+      const result: { error?: string } | null = await response.json().catch(() => null);
+      if (!result) {
+        throw new Error("Respon server tidak valid.");
+      }
+
+      if (!response.ok) {
+        throw new Error("Gagal menghapus: " + (result.error || "Terjadi kesalahan"));
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      setDeleteModal({ show: false, id: null, title: "" });
+      showToast("Transaksi berhasil dihapus!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["admin-keuangan"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Error deleting item:", error);
+      showToast(error instanceof Error ? error.message : "Tidak dapat terhubung ke server backend.", "error");
+    },
+  });
 
   const handleExportExcel = () => {
     setDownloadExcelModal(false);
@@ -77,7 +189,6 @@ export default function Keuangan() {
       return;
     }
 
-    // Format data transaksi untuk Excel
     const excelData = transactions.map((item, index) => ({
       No: index + 1,
       ID: item.id,
@@ -93,75 +204,12 @@ export default function Keuangan() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Data Keuangan");
 
-    // Download file Excel
     XLSX.writeFile(
       workbook,
       `Data_Keuangan_${new Date().toISOString().split("T")[0]}.xlsx`,
     );
     showToast("Berhasil mengunduh data keuangan ke Excel!", "success");
   };
-
-  const showToast = (
-    message: string,
-    type: "success" | "error" = "success",
-  ) => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => {
-      setNotification((prev) => ({ ...prev, show: false }));
-    }, 3000);
-  };
-
-  const getErrorMessage = (error: unknown, fallback: string) =>
-    error instanceof Error ? error.message : fallback;
-
-  const fetchKeuangan = async () => {
-    setIsFetching(true);
-    try {
-      const response = await apiFetch("/admin/data/amount");
-      const result: FinanceResponse | null = await response.json().catch(() => null);
-
-      if (response.ok && result?.data) {
-        setTransactions(result.data);
-      } else if (!response.ok) {
-        throw new Error(result?.error || `Gagal memuat data keuangan (${response.status})`);
-      }
-    } catch (error) {
-      console.error("Gagal mengambil data keuangan:", error);
-      showToast("Gagal terhubung ke backend server.", "error");
-    } finally {
-      setIsFetching(false);
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadKeuangan = async () => {
-      try {
-        const response = await apiFetch("/admin/data/amount");
-        const result: FinanceResponse | null = await response.json().catch(() => null);
-
-        if (isMounted && response.ok && result?.data) {
-          setTransactions(result.data);
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error("Gagal mengambil data keuangan:", error);
-          showToast("Gagal terhubung ke backend server.", "error");
-        }
-      } finally {
-        if (isMounted) {
-          setIsFetching(false);
-        }
-      }
-    };
-
-    void loadKeuangan();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleDragOver = (e: DragEvent<HTMLLabelElement>) => {
     e.preventDefault();
@@ -202,96 +250,28 @@ export default function Keuangan() {
     setCreateModal(true);
   };
 
+  const handleConfirmCreate = () => {
+    setCreateModal(false);
+    createMutation.mutate();
+  };
+
   const handleRefreshKeuangan = async () => {
-    setIsFetching(true);
+    setIsRefreshing(true);
     try {
-      // 1. Panggil endpoint refresh backend Go
       await apiFetch("/keuangan/refresh");
+      await queryClient.invalidateQueries({ queryKey: ["admin-keuangan"] });
+      showToast("Data keuangan berhasil disinkronkan!", "success");
     } catch (error) {
       console.error("Gagal memicu refresh backend:", error);
+      showToast("Gagal menyinkronkan data.", "error");
     } finally {
-      // 2. Ambil ulang data keuangan terbaru
-      await fetchKeuangan();
+      setIsRefreshing(false);
     }
   };
 
-  // Mengirimkan FormData multipart langsung ke Go Backend
-  const handleConfirmCreate = async () => {
-    setCreateModal(false);
-    setIsLoading(true);
-
-    const numAmount = getRawAmount(amount);
-
-    try {
-      const formData = new FormData();
-      // 1. Pastikan key sesuai dengan ctx.PostForm(...) di Go
-      formData.append("title", title.trim());
-      formData.append("type", type);
-      formData.append("amount", String(numAmount));
-
-      // 2. Kirim file hanya jika benar-benar berupa instance File
-      if (selectedFile instanceof File) {
-        formData.append("proof_image", selectedFile, selectedFile.name);
-      }
-
-      const response = await apiFetch("/admin/amount", {
-        method: "POST",
-        // JANGAN tambahkan 'Content-Type': 'application/json' atau 'multipart/form-data'
-        // Browser akan otomatis menyusun boundary multipart
-        body: formData,
-      });
-
-      const result: { error?: string } | null = await response.json().catch(() => null);
-
-      if (response.ok) {
-        setTitle("");
-        setAmount("");
-        setSelectedFile(null);
-        setType("INCOME");
-        await fetchKeuangan();
-        showToast("Berhasil menambahkan catatan keuangan!", "success");
-      } else {
-        showToast(
-          "Gagal menyimpan: " + (result?.error || "Terjadi kesalahan"),
-          "error",
-        );
-      }
-    } catch (error: unknown) {
-      showToast(getErrorMessage(error, "Tidak dapat terhubung ke server backend."), "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Cukup kirimkan ID ke Backend Go (penghapusan file dikelola backend)
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = () => {
     if (!deleteModal.id) return;
-    setIsDeleting(true);
-
-    try {
-      const response = await apiFetch("/admin/data/amount", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: Number(deleteModal.id) }),
-      });
-
-      const result: { error?: string } | null = await response.json().catch(() => null);
-
-      if (response.ok) {
-        await fetchKeuangan();
-        showToast("Transaksi berhasil dihapus!", "success");
-      } else {
-        showToast(
-          "Gagal menghapus: " + (result?.error || "Terjadi kesalahan"),
-          "error",
-        );
-      }
-    } catch {
-      showToast("Tidak dapat terhubung ke server backend.", "error");
-    } finally {
-      setIsDeleting(false);
-      setDeleteModal({ show: false, id: null, title: "" });
-    }
+    deleteMutation.mutate(deleteModal.id);
   };
 
   const currentBalance =
@@ -328,6 +308,58 @@ export default function Keuangan() {
             className={`fa-solid ${notification.type === "success" ? "fa-circle-check text-lg sm:text-xl" : "fa-triangle-exclamation text-lg sm:text-xl"}`}
           ></i>
           <span>{notification.message}</span>
+        </div>
+      )}
+
+      {/* MODAL DETAIL KETERANGAN / DESKRIPSI PANJANG */}
+      {detailModal.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-emerald-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+              <div className="flex items-center gap-2.5 text-emerald-600">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                  <i className="fa-solid fa-circle-info text-base"></i>
+                </div>
+                <h3 className="text-base font-bold text-zinc-900">
+                  Detail Keterangan Transaksi
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailModal({ show: false, title: "", description: "", date: "" })}
+                className="text-zinc-400 hover:text-zinc-700 p-1 cursor-pointer"
+              >
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Tanggal & Waktu</span>
+                <p className="text-xs font-semibold text-zinc-700">{detailModal.date}</p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Judul / Keterangan Singkat</span>
+                <p className="text-sm font-bold text-zinc-900">{detailModal.title}</p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Keterangan Lengkap</span>
+                <div className="mt-1 p-3 bg-zinc-50 border border-zinc-200 rounded-xl max-h-60 overflow-y-auto">
+                  <p className="text-xs sm:text-sm text-zinc-700 whitespace-pre-wrap leading-relaxed">
+                    {detailModal.description}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setDetailModal({ show: false, title: "", description: "", date: "" })}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors cursor-pointer shadow-sm"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -432,7 +464,7 @@ export default function Keuangan() {
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={() =>
                   setDeleteModal({ show: false, id: null, title: "" })
                 }
@@ -442,11 +474,11 @@ export default function Keuangan() {
               </button>
               <button
                 type="button"
-                disabled={isDeleting}
+                disabled={deleteMutation.isPending}
                 onClick={handleDeleteConfirm}
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors shadow-xs cursor-pointer flex items-center gap-2 disabled:opacity-50"
               >
-                {isDeleting && (
+                {deleteMutation.isPending && (
                   <i className="fa-solid fa-spinner animate-spin"></i>
                 )}
                 Ya, Hapus
@@ -466,26 +498,28 @@ export default function Keuangan() {
           organisasi.
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        {/* TOMBOL EXCEL BARU */}
-        <button
-          type="button"
-          onClick={() => setDownloadExcelModal(true)}
-          className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
-        >
-          <i className="fa-solid fa-file-excel"></i> Excel
-        </button>
 
-        <button
-          onClick={handleRefreshKeuangan}
-          disabled={isFetching}
-          className="p-2 px-3 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-        >
-          <i
-            className={`fa-solid fa-rotate ${isFetching ? "animate-spin" : ""}`}
-          ></i>{" "}
-          Muat Ulang
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDownloadExcelModal(true)}
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-colors text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
+          >
+            <i className="fa-solid fa-file-excel"></i> Excel
+          </button>
+
+          <button
+            onClick={handleRefreshKeuangan}
+            disabled={isRefreshing}
+            className="p-2 px-3 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors border border-emerald-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          >
+            <i
+              className={`fa-solid fa-rotate ${isRefreshing ? "animate-spin" : ""}`}
+            ></i>{" "}
+            {isRefreshing ? "Memuat..." : "Muat Ulang"}
+          </button>
+        </div>
         <span className="text-xs font-semibold px-3 py-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl">
           Total: {transactions.length}
         </span>
@@ -500,7 +534,7 @@ export default function Keuangan() {
               Saldo Kas Saat Ini
             </p>
             <h3 className="text-lg sm:text-2xl font-black text-emerald-700 mt-1">
-              {isFetching ? (
+              {isFetchingInitial ? (
                 <div className="h-7 w-28 bg-emerald-100/60 rounded-md animate-pulse mt-1"></div>
               ) : (
                 formatRupiah(currentBalance)
@@ -519,7 +553,7 @@ export default function Keuangan() {
               Total Pemasukan
             </p>
             <h3 className="text-lg sm:text-2xl font-black text-teal-600 mt-1">
-              {isFetching ? (
+              {isFetchingInitial ? (
                 <div className="h-7 w-28 bg-teal-100/60 rounded-md animate-pulse mt-1"></div>
               ) : (
                 formatRupiah(totalIncome)
@@ -527,8 +561,7 @@ export default function Keuangan() {
             </h3>
           </div>
           <div className="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0">
-            <i className="fa-solid fa-arrow-down"></i>{" "}
-            {/* FIX: fa-arrow-down */}
+            <i className="fa-solid fa-arrow-down"></i>
           </div>
         </div>
 
@@ -539,7 +572,7 @@ export default function Keuangan() {
               Total Pengeluaran
             </p>
             <h3 className="text-lg sm:text-2xl font-black text-rose-600 mt-1">
-              {isFetching ? (
+              {isFetchingInitial ? (
                 <div className="h-7 w-28 bg-rose-100/60 rounded-md animate-pulse mt-1"></div>
               ) : (
                 formatRupiah(totalExpense)
@@ -547,7 +580,7 @@ export default function Keuangan() {
             </h3>
           </div>
           <div className="w-11 h-11 rounded-xl bg-rose-600 text-white flex items-center justify-center text-xl font-bold shadow-sm shrink-0">
-            <i className="fa-solid fa-arrow-up"></i> {/* FIX: fa-arrow-up */}
+            <i className="fa-solid fa-arrow-up"></i>
           </div>
         </div>
       </div>
@@ -619,7 +652,6 @@ export default function Keuangan() {
             </div>
           </div>
 
-          {/* FIXED: Mengembalikan input text untuk Keterangan/Judul */}
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700 mb-1.5">
               Keterangan / Deskripsi
@@ -698,10 +730,10 @@ export default function Keuangan() {
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={createMutation.isPending}
             className="w-full mt-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-xl shadow-sm hover:shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
           >
-            {isLoading ? (
+            {createMutation.isPending ? (
               <>
                 <i className="fa-solid fa-spinner animate-spin"></i>
                 Mengunggah & Menyimpan...
@@ -740,7 +772,7 @@ export default function Keuangan() {
           </div>
         </div>
 
-        {isFetching ? (
+        {isFetchingInitial ? (
           <div className="space-y-3 py-4">
             {[1, 2, 3].map((n) => (
               <div
@@ -770,83 +802,103 @@ export default function Keuangan() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
-                {[...transactions].reverse().map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-emerald-50/30 transition-colors"
-                  >
-                    <td className="py-3.5 px-3.5 text-zinc-500 whitespace-nowrap text-xs">
-                      {new Date(item.transaction_date).toLocaleDateString(
-                        "id-ID",
-                        {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        },
-                      )}
-                    </td>
-                    <td className="py-3.5 px-3.5 font-semibold text-zinc-800 max-w-xs truncate">
-                      {item.title}
-                    </td>
-                    <td className="py-3.5 px-3.5 whitespace-nowrap">
-                      {item.type === "INCOME" ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          <i className="fa-solid fa-arrow-down mr-1"></i> Masuk
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                          <i className="fa-solid fa-arrow-up mr-1"></i> Keluar
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className={`py-3.5 px-3.5 font-bold whitespace-nowrap ${
-                        item.type === "INCOME"
-                          ? "text-emerald-600"
-                          : "text-rose-600"
-                      }`}
+                {[...transactions].reverse().map((item) => {
+                  const formattedDate = new Date(item.transaction_date).toLocaleDateString(
+                    "id-ID",
+                    {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    },
+                  );
+
+                  return (
+                    <tr
+                      key={item.id}
+                      className="hover:bg-emerald-50/30 transition-colors"
                     >
-                      {item.type === "INCOME" ? "+" : "-"}{" "}
-                      {formatRupiah(item.amount)}
-                    </td>
-                    <td className="py-3.5 px-3.5 font-bold text-zinc-700 whitespace-nowrap">
-                      {formatRupiah(item.balance_after)}
-                    </td>
-                    <td className="py-3.5 px-3.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
-                        {item.proof_image && item.proof_image.trim() !== "" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              window.open(
-                                apiUrl(`/uploads/${item.proof_image}`),
-                                "_blank",
-                              )
-                            }
-                            className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                          >
-                            <i className="fa-regular fa-image"></i> Nota
-                          </button>
-                        )}
-                        <button
-                          type="button"
+                      <td className="py-3.5 px-3.5 text-zinc-500 whitespace-nowrap text-xs">
+                        {formattedDate}
+                      </td>
+                      {/* DESKRIPSI: Bisa diklik untuk melihat teks panjang jika terpotong */}
+                      <td className="py-3.5 px-3.5 font-semibold text-zinc-800 max-w-xs">
+                        <div
                           onClick={() =>
-                            setDeleteModal({
+                            setDetailModal({
                               show: true,
-                              id: item.id,
                               title: item.title,
+                              description: item.title,
+                              date: formattedDate,
                             })
                           }
-                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                          className="truncate cursor-pointer hover:text-emerald-700 hover:underline flex items-center gap-1.5 group"
+                          title="Klik untuk melihat keterangan lengkap"
                         >
-                          <i className="fa-solid fa-trash-can"></i> Hapus
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          <span className="truncate">{item.title}</span>
+                          <i className="fa-solid fa-expand text-[10px] text-zinc-400 group-hover:text-emerald-600 shrink-0"></i>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3.5 whitespace-nowrap">
+                        {item.type === "INCOME" ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            <i className="fa-solid fa-arrow-down mr-1"></i> Masuk
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            <i className="fa-solid fa-arrow-up mr-1"></i> Keluar
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className={`py-3.5 px-3.5 font-bold whitespace-nowrap ${
+                          item.type === "INCOME"
+                            ? "text-emerald-600"
+                            : "text-rose-600"
+                        }`}
+                      >
+                        {item.type === "INCOME" ? "+" : "-"}{" "}
+                        {formatRupiah(item.amount)}
+                      </td>
+                      <td className="py-3.5 px-3.5 font-bold text-zinc-700 whitespace-nowrap">
+                        {formatRupiah(item.balance_after)}
+                      </td>
+                      <td className="py-3.5 px-3.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          {item.proof_image && item.proof_image.trim() !== "" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                window.open(
+                                  apiUrl(`/uploads/${item.proof_image}`),
+                                  "_blank",
+                                )
+                              }
+                              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                            >
+                              <i className="fa-regular fa-image"></i> Nota
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={deleteMutation.isPending}
+                            onClick={() =>
+                              setDeleteModal({
+                                show: true,
+                                id: item.id,
+                                title: item.title,
+                              })
+                            }
+                            className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1 shadow-2xs disabled:opacity-50"
+                          >
+                            <i className="fa-solid fa-trash-can"></i> Hapus
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

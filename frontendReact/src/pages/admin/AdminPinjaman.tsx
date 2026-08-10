@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import * as XLSX from "xlsx";
 import { apiFetch } from "../../lib/api";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 interface LoanItem {
   id: number;
@@ -25,15 +26,20 @@ interface ConfirmState {
   message: string;
 }
 
-export default function AdminPinjaman() {
-  const [loans, setLoans] = useState<LoanItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
-  const [actionMessage, setActionMessage] = useState<string>("");
+interface NotificationState {
+  show: boolean;
+  message: string;
+  type: "success" | "error";
+}
 
-  // State untuk Modal Konfirmasi
+export default function AdminPinjaman() {
+  const queryClient = useQueryClient();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [downloadExcelModal, setDownloadExcelModal] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // State untuk Modal Konfirmasi Aksi (Update/Delete)
   const [confirmModal, setConfirmModal] = useState<ConfirmState>({
     isOpen: false,
     type: "UPDATE",
@@ -42,68 +48,102 @@ export default function AdminPinjaman() {
     message: "",
   });
 
-  const fetchLoans = async () => {
-    setErrorMessage(null);
-    try {
+  // Toast Notification State
+  const [notification, setNotification] = useState<NotificationState>({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (
+    message: string,
+    type: "success" | "error" = "success",
+  ) => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification((prev) => ({ ...prev, show: false }));
+    }, 3500);
+  };
+
+  // 1. FETCH DATA PEMINJAMAN DENGAN REACT QUERY[cite: 20]
+  const { data: loans = [], isLoading: isFetchingInitial } = useQuery<LoanItem[]>({
+    queryKey: ["admin-peminjaman"],
+    queryFn: async () => {
       const res = await apiFetch("/barang/peminjam");
       if (!res.ok) {
         throw new Error(`Gagal memuat data dari server (${res.status})`);
       }
 
-      let data: LoanItem[] = [];
-      try {
-        data = await res.json();
-      } catch {
+      const data: LoanItem[] | null = await res.json().catch(() => null);
+      if (!data) {
         throw new Error("Respon server tidak valid atau terjadi kesalahan backend.");
       }
 
-      setLoans(Array.isArray(data) ? data : []);
-    } catch (err: unknown) {
-      console.error("Gagal mengambil data peminjam:", err);
-      setErrorMessage(err instanceof Error ? err.message : "Gagal terhubung ke server.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      return Array.isArray(data) ? data : [];
+    },
+  });
 
-  useEffect(() => {
-    let isMounted = true;
+  // 2. MUTATION UPDATE STATUS PEMINJAMAN DENGAN REACT QUERY[cite: 20]
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: number; status: string }) => {
+      const res = await apiFetch("/barang/update", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
 
-    const loadLoans = async () => {
-      if (isMounted) {
-        setErrorMessage(null);
+      const result: { err?: string; details?: string } | null = await res.json().catch(() => null);
+      if (!result) {
+        throw new Error(`Server Error (${res.status}): Respon server tidak valid.`);
       }
 
-      try {
-        const res = await apiFetch("/barang/peminjam");
-        if (!res.ok) {
-          throw new Error(`Gagal memuat data dari server (${res.status})`);
-        }
-
-        const data: LoanItem[] | null = await res.json().catch(() => null);
-        if (isMounted) {
-          setLoans(Array.isArray(data) ? data : []);
-        }
-      } catch (error) {
-        if (isMounted) {
-          console.error("Gagal mengambil data peminjam:", error);
-          setErrorMessage(error instanceof Error ? error.message : "Gagal terhubung ke server.");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
+      if (!res.ok) {
+        throw new Error(result.err || result.details || "Gagal memperbarui status.");
       }
-    };
 
-    void loadLoans();
+      return result;
+    },
+    onSuccess: () => {
+      showToast("Status peminjaman berhasil diperbarui!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["admin-peminjaman"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Update error:", error);
+      showToast(error instanceof Error ? error.message : "Terjadi kesalahan koneksi ke server.", "error");
+    },
+  });
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  // 3. MUTATION HAPUS PEMINJAMAN DENGAN REACT QUERY[cite: 20]
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await apiFetch("/barang/peminjaman", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
 
-  // Safe Format Date (Mencegah Layar Putih dari Invalid Date)
+      const result: { err?: string; details?: string } | null = await res.json().catch(() => null);
+      if (!result) {
+        throw new Error(`Server Error (${res.status}): Respon server tidak valid.`);
+      }
+
+      if (!res.ok) {
+        throw new Error(result.err || result.details || "Gagal menghapus data.");
+      }
+
+      return result;
+    },
+    onSuccess: () => {
+      showToast("Data peminjaman berhasil dihapus!", "success");
+      void queryClient.invalidateQueries({ queryKey: ["admin-peminjaman"] });
+    },
+    onError: (error: unknown) => {
+      console.error("Delete error:", error);
+      showToast(error instanceof Error ? error.message : "Terjadi kesalahan koneksi ke server.", "error");
+    },
+  });
+
+  // Safe Format Date
   const formatDate = (dateString?: string) => {
     if (!dateString) return "-";
     try {
@@ -116,41 +156,6 @@ export default function AdminPinjaman() {
       });
     } catch {
       return "-";
-    }
-  };
-
-  // Fungsi Export ke Excel
-  const handleExportExcel = () => {
-    try {
-      if (filteredLoans.length === 0) {
-        alert("Tidak ada data untuk diunduh.");
-        return;
-      }
-
-      const excelData = filteredLoans.map((loan, index) => ({
-        No: index + 1,
-        Peminjam: loan.borrower_name || "-",
-        Barang: loan.item_name || "-",
-        "Jumlah Pinjam": loan.quantity_borrowed || 0,
-        "Nama Acara / Keperluan": loan.event_name || "-",
-        "Rencana Pinjam": formatDate(loan.planned_borrow_date),
-        "Rencana Kembali": formatDate(loan.planned_return_date),
-        Status: loan.status || "PENDING",
-        "Tanggal Pengajuan": formatDate(loan.borrow_date),
-        "Tanggal Dikembalikan": formatDate(loan.return_date),
-      }));
-
-      const worksheet = XLSX.utils.json_to_sheet(excelData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Peminjaman");
-
-      XLSX.writeFile(
-        workbook,
-        `Laporan_Peminjaman_Barang_${new Date().toISOString().slice(0, 10)}.xlsx`
-      );
-    } catch (err) {
-      console.error("Export Excel Error:", err);
-      alert("Gagal mengunduh file Excel.");
     }
   };
 
@@ -195,63 +200,68 @@ export default function AdminPinjaman() {
     }
   };
 
-  // Eksekusi aksi setelah user klik tombol "Ya, Lanjutkan" di Modal
-  const handleConfirmAction = async () => {
+  // Eksekusi aksi setelah user klik tombol konfirmasi di Modal
+  const handleConfirmAction = () => {
     if (confirmModal.id === null) return;
 
     const { type, id, status } = confirmModal;
-    setConfirmModal((prev) => ({ ...prev, isOpen: false })); // Tutup modal
+    setConfirmModal((prev) => ({ ...prev, isOpen: false }));
 
-    setActionLoadingId(id);
+    if (type === "UPDATE" && status) {
+      updateStatusMutation.mutate({ id, status });
+    } else if (type === "DELETE") {
+      deleteMutation.mutate(id);
+    }
+  };
 
+  // Refresh Data Manual
+  const handleRefreshLoans = async () => {
+    setIsRefreshing(true);
     try {
-      if (type === "UPDATE" && status) {
-        setActionMessage(`Memproses status ${status.toLowerCase()}...`);
-
-        const res = await apiFetch("/barang/update", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, status }),
-        });
-
-        const result: { err?: string; details?: string } | null = await res.json().catch(() => null);
-        if (!result) {
-          throw new Error(`Server Error (${res.status}): Respon server tidak valid.`);
-        }
-
-        if (!res.ok) {
-          throw new Error(result.err || result.details || "Gagal memperbarui status.");
-        }
-
-        setActionMessage("Memperbarui data peminjaman...");
-        await fetchLoans();
-      } else if (type === "DELETE") {
-        setActionMessage("Menghapus data peminjaman...");
-
-        const res = await apiFetch("/barang/peminjaman", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id }),
-        });
-
-        const result: { err?: string; details?: string } | null = await res.json().catch(() => null);
-        if (!result) {
-          throw new Error(`Server Error (${res.status}): Respon server tidak valid.`);
-        }
-
-        if (!res.ok) {
-          throw new Error(result.err || result.details || "Gagal menghapus data.");
-        }
-
-        setActionMessage("Memperbarui data peminjaman...");
-        await fetchLoans();
-      }
-    } catch (err: unknown) {
-      console.error("Action error:", err);
-      alert(err instanceof Error ? err.message : "Terjadi kesalahan koneksi ke server.");
+      await queryClient.invalidateQueries({ queryKey: ["admin-peminjaman"] });
+      showToast("Data peminjaman berhasil diperbarui!", "success");
+    } catch (error) {
+      console.error("Gagal menyinkronkan data:", error);
+      showToast("Gagal menyinkronkan data.", "error");
     } finally {
-      setActionLoadingId(null);
-      setActionMessage("");
+      setIsRefreshing(false);
+    }
+  };
+
+  // Fungsi Export ke Excel
+  const handleExportExcel = () => {
+    setDownloadExcelModal(false);
+    try {
+      if (filteredLoans.length === 0) {
+        showToast("Tidak ada data untuk diunduh!", "error");
+        return;
+      }
+
+      const excelData = filteredLoans.map((loan, index) => ({
+        No: index + 1,
+        Peminjam: loan.borrower_name || "-",
+        Barang: loan.item_name || "-",
+        "Jumlah Pinjam": loan.quantity_borrowed || 0,
+        "Nama Acara / Keperluan": loan.event_name || "-",
+        "Rencana Pinjam": formatDate(loan.planned_borrow_date),
+        "Rencana Kembali": formatDate(loan.planned_return_date),
+        Status: loan.status || "PENDING",
+        "Tanggal Pengajuan": formatDate(loan.borrow_date),
+        "Tanggal Dikembalikan": formatDate(loan.return_date),
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Data Peminjaman");
+
+      XLSX.writeFile(
+        workbook,
+        `Laporan_Peminjaman_Barang_${new Date().toISOString().slice(0, 10)}.xlsx`
+      );
+      showToast("Berhasil mengunduh data peminjaman ke Excel!", "success");
+    } catch (err) {
+      console.error("Export Excel Error:", err);
+      showToast("Gagal mengunduh file Excel.", "error");
     }
   };
 
@@ -281,9 +291,66 @@ export default function AdminPinjaman() {
     }
   };
 
+  const isAnyActionPending = updateStatusMutation.isPending || deleteMutation.isPending;
+
   return (
     <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6 font-sans">
-      {/* MODAL KONFIRMASI (YAKIN / BATAL) */}
+      {/* TOAST NOTIFIKASI */}
+      {notification.show && (
+        <div
+          className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl shadow-xl text-white font-semibold text-sm transition-all animate-bounce ${
+            notification.type === "success"
+              ? "bg-emerald-600 border border-emerald-500"
+              : "bg-rose-600 border border-rose-500"
+          }`}
+        >
+          <i
+            className={`fa-solid ${
+              notification.type === "success"
+                ? "fa-circle-check text-xl"
+                : "fa-triangle-exclamation text-xl"
+            }`}
+          ></i>
+          <span>{notification.message}</span>
+        </div>
+      )}
+
+      {/* MODAL DOWNLOAD EXCEL */}
+      {downloadExcelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl border border-emerald-100 space-y-4">
+            <div className="flex items-center gap-3 text-emerald-600">
+              <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                <i className="fa-solid fa-file-excel text-xl"></i>
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900">Unduh Data Excel</h3>
+            </div>
+            <p className="text-sm text-zinc-600 leading-relaxed">
+              Apakah Anda yakin ingin mengunduh seluruh data peminjaman (
+              <strong className="text-zinc-900">{filteredLoans.length} data</strong>) ke format file Excel?
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDownloadExcelModal(false)}
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm cursor-pointer flex items-center gap-2"
+              >
+                <i className="fa-solid fa-download"></i>
+                Ya, Unduh Excel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL KONFIRMASI (UPDATE / DELETE) */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex justify-center items-center p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
@@ -291,12 +358,14 @@ export default function AdminPinjaman() {
             <p className="text-sm text-zinc-600 leading-relaxed">{confirmModal.message}</p>
             <div className="flex justify-end gap-2.5 pt-2">
               <button
+                type="button"
                 onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
                 className="px-4 py-2 bg-zinc-100 text-zinc-700 rounded-xl text-xs font-semibold hover:bg-zinc-200 transition cursor-pointer"
               >
                 Batal
               </button>
               <button
+                type="button"
                 onClick={handleConfirmAction}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 transition cursor-pointer shadow-xs"
               >
@@ -307,12 +376,12 @@ export default function AdminPinjaman() {
         </div>
       )}
 
-      {/* FULL-SCREEN OVERLAY LOADING SAAT AKSI PERUBAHAN DATA */}
-      {actionLoadingId !== null && (
+      {/* FULL-SCREEN OVERLAY LOADING SAAT MUTASI BERLANGSUNG */}
+      {isAnyActionPending && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs z-50 flex flex-col justify-center items-center">
           <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center space-y-3 min-w-[220px]">
             <div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-600 border-t-transparent"></div>
-            <p className="text-zinc-700 text-xs font-semibold">{actionMessage || "Mohon tunggu..."}</p>
+            <p className="text-zinc-700 text-xs font-semibold">Memproses perubahan data...</p>
           </div>
         </div>
       )}
@@ -327,13 +396,25 @@ export default function AdminPinjaman() {
         <div className="w-full md:w-auto flex flex-col sm:flex-row items-center gap-3">
           {/* Tombol Export Excel */}
           <button
-            onClick={handleExportExcel}
+            type="button"
+            onClick={() => setDownloadExcelModal(true)}
             className="w-full sm:w-auto px-4 py-2 bg-emerald-800 hover:bg-emerald-900 border border-emerald-500/30 text-white text-xs font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
           >
             <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-9-2.5 4 2.5 4h-2.1l-1.4-2.4L11.1 19H9l2.5-4L9 11h2.1l1.4 2.4 1.4-2.4H16z"/>
             </svg>
             Download Excel
+          </button>
+
+          {/* Tombol Refresh Manual */}
+          <button
+            type="button"
+            onClick={handleRefreshLoans}
+            disabled={isRefreshing}
+            className="w-full sm:w-auto px-4 py-2 bg-emerald-800 hover:bg-emerald-900 border border-emerald-500/30 text-white text-xs font-medium rounded-xl transition flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+          >
+            <i className={`fa-solid fa-rotate ${isRefreshing ? "animate-spin" : ""}`}></i>
+            {isRefreshing ? "Memuat..." : "Muat Ulang"}
           </button>
 
           {/* Search Box */}
@@ -343,26 +424,13 @@ export default function AdminPinjaman() {
               placeholder="Cari peminjam / barang..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-3 pr-3 py-2 text-sm rounded-xl bg-white/10 border border-white/20 text-white placeholder-emerald-200 focus:outline-none"
+              className="w-full pl-3 pr-3 py-2 text-sm rounded-xl bg-white/10 border border-white/20 text-white placeholder-emerald-200 focus:outline-hidden"
             />
           </div>
         </div>
       </div>
 
-      {/* BANNER ERROR SEMENTARA BILA API BERMASALAH */}
-      {errorMessage && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex justify-between items-center">
-          <span>⚠️ {errorMessage}</span>
-          <button
-            onClick={fetchLoans}
-            className="px-3 py-1 bg-rose-600 text-white rounded-lg font-medium hover:bg-rose-700 transition cursor-pointer"
-          >
-            Coba Lagi
-          </button>
-        </div>
-      )}
-
-      {isLoading ? (
+      {isFetchingInitial ? (
         <div className="flex justify-center items-center py-24">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-700"></div>
           <span className="ml-3 text-zinc-500 text-sm">Memuat data peminjaman...</span>
@@ -407,15 +475,17 @@ export default function AdminPinjaman() {
                             {loan.status === "PENDING" && (
                               <>
                                 <button
+                                  type="button"
                                   onClick={() => openConfirmModal("UPDATE", loan.id, loan.borrower_name, "APPROVED")}
-                                  disabled={actionLoadingId !== null}
+                                  disabled={isAnyActionPending}
                                   className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-medium hover:bg-emerald-700 transition disabled:opacity-50 cursor-pointer"
                                 >
                                   Approve
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => openConfirmModal("UPDATE", loan.id, loan.borrower_name, "REJECTED")}
-                                  disabled={actionLoadingId !== null}
+                                  disabled={isAnyActionPending}
                                   className="px-2.5 py-1 bg-rose-600 text-white rounded-lg text-[11px] font-medium hover:bg-rose-700 transition disabled:opacity-50 cursor-pointer"
                                 >
                                   Reject
@@ -424,16 +494,18 @@ export default function AdminPinjaman() {
                             )}
                             {loan.status === "APPROVED" && (
                               <button
+                                type="button"
                                 onClick={() => openConfirmModal("UPDATE", loan.id, loan.borrower_name, "RETURNED")}
-                                disabled={actionLoadingId !== null}
+                                disabled={isAnyActionPending}
                                 className="px-2.5 py-1 bg-blue-600 text-white rounded-lg text-[11px] font-medium hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
                               >
                                 Selesai/Kembali
                               </button>
                             )}
                             <button
+                              type="button"
                               onClick={() => openConfirmModal("DELETE", loan.id, loan.borrower_name)}
-                              disabled={actionLoadingId !== null}
+                              disabled={isAnyActionPending}
                               className="px-2.5 py-1 border border-rose-300 text-rose-600 rounded-lg text-[11px] font-medium hover:bg-rose-50 transition disabled:opacity-50 cursor-pointer"
                             >
                               Hapus
@@ -480,15 +552,17 @@ export default function AdminPinjaman() {
                     {loan.status === "PENDING" && (
                       <>
                         <button
+                          type="button"
                           onClick={() => openConfirmModal("UPDATE", loan.id, loan.borrower_name, "APPROVED")}
-                          disabled={actionLoadingId !== null}
+                          disabled={isAnyActionPending}
                           className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium disabled:opacity-50 cursor-pointer"
                         >
                           Approve
                         </button>
                         <button
+                          type="button"
                           onClick={() => openConfirmModal("UPDATE", loan.id, loan.borrower_name, "REJECTED")}
-                          disabled={actionLoadingId !== null}
+                          disabled={isAnyActionPending}
                           className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-medium disabled:opacity-50 cursor-pointer"
                         >
                           Reject
@@ -497,16 +571,18 @@ export default function AdminPinjaman() {
                     )}
                     {loan.status === "APPROVED" && (
                       <button
+                        type="button"
                         onClick={() => openConfirmModal("UPDATE", loan.id, loan.borrower_name, "RETURNED")}
-                        disabled={actionLoadingId !== null}
+                        disabled={isAnyActionPending}
                         className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-50 cursor-pointer"
                       >
                         Tandai Dikembalikan
                       </button>
                     )}
                     <button
+                      type="button"
                       onClick={() => openConfirmModal("DELETE", loan.id, loan.borrower_name)}
-                      disabled={actionLoadingId !== null}
+                      disabled={isAnyActionPending}
                       className="px-3 py-1.5 border border-rose-300 text-rose-600 rounded-lg text-xs font-medium disabled:opacity-50 cursor-pointer"
                     >
                       Hapus
