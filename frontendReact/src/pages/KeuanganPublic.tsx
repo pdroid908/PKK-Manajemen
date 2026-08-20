@@ -31,7 +31,7 @@ export default function KeuanganPublic() {
   } = useQuery<FinanceTransaction[]>({
     queryKey: ["keuangan-public"],
     queryFn: async () => {
-      const response = await apiFetch("/admin/data/amount");
+      const response = await apiFetch("admin/data/amount");
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
         throw new Error("Server tidak mengembalikan format JSON.");

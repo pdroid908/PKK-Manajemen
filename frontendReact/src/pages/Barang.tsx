@@ -18,7 +18,7 @@ export default function BarangUser() {
   const { data: items = [], isLoading } = useQuery<InventoryItem[]>({
     queryKey: ["inventory-user"],
     queryFn: async () => {
-      const res = await apiFetch("/admin/barang");
+      const res = await apiFetch("admin/barang");
       if (!res.ok) throw new Error("Gagal mengambil data dari server.");
       const data = await res.json();
       return Array.isArray(data) ? data : [];

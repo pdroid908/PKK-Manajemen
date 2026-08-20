@@ -78,7 +78,7 @@ export default function AdminDashboard() {
   const { data: items = [], isLoading: isFetchingInitial } = useQuery<PostItem[]>({
     queryKey: ["admin-pengumuman"],
     queryFn: async () => {
-      const response = await apiFetch("/admin/pengumuman");
+      const response = await apiFetch("admin/pengumuman");
       if (!response.ok) {
         throw new Error(`Server error (${response.status})`);
       }
@@ -118,7 +118,7 @@ export default function AdminDashboard() {
         formData.append("image", selectedFile);
       }
 
-      const response = await apiFetch("/admin/add/dashboard", {
+      const response = await apiFetch("admin/add/dashboard", {
         method: "POST",
         body: formData,
       });
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
   // 3. MUTATION HAPUS PENGUMUMAN DENGAN REACT QUERY[cite: 20]
   const deleteMutation = useMutation({
     mutationFn: async (id: number | string) => {
-      const response = await apiFetch("/admin/delet", {
+      const response = await apiFetch("admin/delet", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: Number(id) }),
@@ -229,7 +229,7 @@ export default function AdminDashboard() {
   const handleRefreshPengumuman = async () => {
     setIsRefreshing(true);
     try {
-      await apiFetch("/pengumuman/refresh");
+      await apiFetch("pengumuman/refresh");
       await queryClient.invalidateQueries({ queryKey: ["admin-pengumuman"] });
       showToast("Data berhasil diperbarui!", "success");
     } catch (error) {

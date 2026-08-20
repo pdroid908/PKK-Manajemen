@@ -70,7 +70,7 @@ export default function Dashboard() {
   const { data: latestItem = null, isLoading } = useQuery<PostItem | null>({
     queryKey: ["pengumuman-latest"],
     queryFn: async () => {
-      const response = await apiFetch("/admin/pengumuman");
+      const response = await apiFetch("admin/pengumuman");
       const result: PengumumanResponse = await response.json();
 
       if (response.ok && result.data && result.data.length > 0) {

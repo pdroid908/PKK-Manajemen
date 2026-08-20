@@ -1,4 +1,4 @@
-const rawApiBaseUrl = import.meta.env.VITE_API_URL as string | undefined;
+const rawApiBaseUrl = import.meta.env.VITE_API_URL as string 
 
 const apiBaseUrl = (rawApiBaseUrl ?? "").trim().replace(/\/+$/, "");
 
