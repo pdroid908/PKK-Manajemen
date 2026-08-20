@@ -47,7 +47,7 @@ export default function Inventory() {
   const { data: items = [], isLoading: isFetching } = useQuery<InventoryItem[]>({
     queryKey: ["admin-inventory"],
     queryFn: async () => {
-      const res = await apiFetch("admin/barang");
+      const res = await apiFetch("/admin/barang");
       if (!res.ok) {
         throw new Error(`Gagal memuat data (${res.status})`);
       }
@@ -59,7 +59,7 @@ export default function Inventory() {
   // 2. MUTATION TAMBAH BARANG MENGGUNAKAN TANSTACK REACT QUERY
   const addMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const res = await apiFetch("admin/barang", {
+      const res = await apiFetch("/admin/barang", {
         method: "POST",
         body: formData,
       });
@@ -87,7 +87,7 @@ export default function Inventory() {
   // 3. MUTATION HAPUS BARANG MENGGUNAKAN TANSTACK REACT QUERY
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const res = await apiFetch("admin/barang", {
+      const res = await apiFetch("/admin/barang", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: Number(id) }),
@@ -111,7 +111,7 @@ export default function Inventory() {
 
   const handleRefreshInventory = async () => {
     try {
-      await apiFetch("barang/refresh", {
+      await apiFetch("/barang/refresh", {
         method: "POST",
       });
       showToast("Cache berhasil diperbarui!", "success");

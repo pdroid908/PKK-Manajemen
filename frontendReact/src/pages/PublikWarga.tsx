@@ -11,7 +11,7 @@ export default function PublikWarga() {
   const { data: wargaList = [], isLoading } = useQuery<WargaPublik[]>({
     queryKey: ["warga-public"],
     queryFn: async () => {
-      const response = await apiFetch("warga/data?aktif=true");
+      const response = await apiFetch("/warga/data?aktif=true");
       if (!response.ok) throw new Error("Gagal memuat data warga.");
       const result = await response.json();
       if (Array.isArray(result.data)) {

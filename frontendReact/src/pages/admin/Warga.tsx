@@ -73,7 +73,7 @@ export default function WargaManagement() {
   const { data: items = [], isLoading: isFetchingInitial } = useQuery<WargaItem[]>({
     queryKey: ["warga-data", filterAktifOnly],
     queryFn: async () => {
-      const endpoint = filterAktifOnly ? "warga/data?aktif=true" : "warga/data";
+      const endpoint = filterAktifOnly ? "/warga/data?aktif=true" : "/warga/data";
       const response = await apiFetch(endpoint);
 
       if (!response.ok) {
@@ -109,7 +109,7 @@ export default function WargaManagement() {
         no_hp: noHp ? noHp : null,
       };
 
-      const response = await apiFetch("warga/add", {
+      const response = await apiFetch("/warga/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -142,7 +142,7 @@ export default function WargaManagement() {
   // 3. Mutation Soft Delete Warga (PUT /warga/update/:id)
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiFetch(`warga/update/${id}`, {
+      const response = await apiFetch(`/warga/update/${id}`, {
         method: "PUT",
       });
 
@@ -171,7 +171,7 @@ export default function WargaManagement() {
   // 4. Mutation Refresh Data & Invalidate Cache (POST /warga/refresh)
   const refreshMutation = useMutation({
     mutationFn: async () => {
-      await apiFetch("warga/refresh", { method: "POST" });
+      await apiFetch("/warga/refresh", { method: "POST" });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["warga-data"] });
@@ -186,7 +186,7 @@ export default function WargaManagement() {
   // 5. Mutation Restore Warga Aktif Kembali
   const restoreMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiFetch(`warga/restore/${id}`, { method: "PUT" });
+      const response = await apiFetch(`/warga/restore/${id}`, { method: "PUT" });
       if (!response.ok) {
         throw new Error("Gagal mengaktifkan warga.");
       }
@@ -205,7 +205,7 @@ export default function WargaManagement() {
   // 6. Mutation Hard Delete
   const hardDeleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await apiFetch(`warga/delete/${id}`, { method: "DELETE" });
+      const response = await apiFetch(`/warga/delete/${id}`, { method: "DELETE" });
       if (!response.ok) {
         throw new Error("Gagal menghapus data secara permanen.");
       }

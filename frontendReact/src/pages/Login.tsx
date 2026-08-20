@@ -37,7 +37,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await apiFetch("api/login", {
+      const response = await apiFetch("/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

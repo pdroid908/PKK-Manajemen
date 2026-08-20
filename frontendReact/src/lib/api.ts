@@ -1,5 +1,6 @@
-const rawApiBaseUrl = import.meta.env.VITE_API_URL as string 
+const rawApiBaseUrl = import.meta.env.VITE_API_URL as string | undefined;
 
+// Menghapus slash di paling akhir URL jika ada
 const apiBaseUrl = (rawApiBaseUrl ?? "").trim().replace(/\/+$/, "");
 
 export const apiUrl = (path: string) => {
@@ -13,24 +14,16 @@ export const apiUrl = (path: string) => {
 };
 
 export async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  const BASE_URL = import.meta.env.VITE_API_URL || "";
-
-  // Gabungkan header default dengan options header
   const headers = new Headers(options.headers || {});
 
-  // Pastikan credentials "include" aktif agar HttpOnly Cookie terkirim otomatis oleh browser
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  // Menggunakan helper apiUrl agar URL terbentuk bersih tanpa double slash '//'
+  const fullUrl = apiUrl(endpoint);
+
+  const response = await fetch(fullUrl, {
     ...options,
     headers,
-    credentials: "include",
+    credentials: "include", // Kirim cookie otomatis
   });
-
-  // Jika token cookie tidak valid/kedaluwarsa (401), lempar otomatis ke halaman /login
-  if (response.status === 401) {
-    if (window.location.pathname !== "/login") {
-      window.location.href = "/login";
-    }
-  }
 
   return response;
 }
