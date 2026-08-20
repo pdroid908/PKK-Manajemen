@@ -93,7 +93,7 @@ export default function Dashboard() {
     <div className="max-w-5xl mx-auto space-y-4 pb-12">
       {/* KONTEN UTAMA PENGUMUMAN */}
 {isLoading ? (
-  <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-5 sm:p-8 space-y-5 animate-pulse">
+  <div className="bg-amber-50/60 rounded-3xl border border-emerald-100 shadow-sm p-5 sm:p-8 space-y-5 animate-pulse">
     {/* Simulasi Header Badge & Title */}
     <div className="space-y-3">
       <div className="w-32 h-6 bg-emerald-100 rounded-xl"></div>
@@ -121,7 +121,7 @@ export default function Dashboard() {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border-2 border-emerald-100 shadow-xl overflow-hidden p-5 sm:p-8 transition-all space-y-5">
+        <div className="bg-amber-50/60 rounded-3xl border-2 border-emerald-100 shadow-xl overflow-hidden p-5 sm:p-8 transition-all space-y-5">
           {/* HEADER: Badge & Judul */}
           <div>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-100/80 text-emerald-800 text-[11px] font-black uppercase tracking-wider border border-emerald-200">
@@ -208,7 +208,7 @@ export default function Dashboard() {
 
       {/* SEKSI JADWAL RUTIN, PENGURUS, & SPONSOR */}
       <div className="space-y-4 pt-2">
-        <div className="bg-white rounded-3xl border-2 border-emerald-100 p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="bg-amber-50/60 rounded-3xl border-2 border-emerald-100 p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -276,7 +276,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border-2 border-emerald-100 p-5 sm:p-6 shadow-sm space-y-4">
+        <div className="bg-amber-50/60 rounded-3xl border-2 border-emerald-100 p-5 sm:p-6 shadow-sm space-y-4">
           <div className="flex items-center gap-2.5 border-b border-emerald-100 pb-3">
             <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-xs">
               <i className="fa-solid fa-users text-sm"></i>
@@ -296,28 +296,28 @@ export default function Dashboard() {
               <p className="text-[11px] font-black uppercase text-emerald-800 tracking-wider">
                 Ketua PKK
               </p>
-              <p className="text-xs font-bold text-slate-900 truncate">Ibu Hj. Siti Aminah</p>
+              <p className="text-xs font-bold text-slate-900 truncate">Haji Nanang </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
               <p className="text-[11px] font-black uppercase text-emerald-800 tracking-wider">
                 Wakil Ketua
               </p>
-              <p className="text-xs font-bold text-slate-900 truncate">Ibu Nurhayati</p>
+              <p className="text-xs font-bold text-slate-900 truncate">Haji Nanang</p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
               <p className="text-[11px] font-black uppercase text-emerald-800 tracking-wider">
                 Sekretaris
               </p>
-              <p className="text-xs font-bold text-slate-900 truncate">Ibu Ratna Pertiwi</p>
+              <p className="text-xs font-bold text-slate-900 truncate">Haji Nanang</p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-center space-y-1">
               <p className="text-[11px] font-black uppercase text-emerald-800 tracking-wider">
                 Bendahara
               </p>
-              <p className="text-xs font-bold text-slate-900 truncate">Ibu Sri Wahyuni</p>
+              <p className="text-xs font-bold text-slate-900 truncate">Haji Nanang</p>
             </div>
           </div>
         </div>
@@ -343,14 +343,14 @@ export default function Dashboard() {
             <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl transition">
               <i className="fa-solid fa-school text-emerald-400 text-base"></i>
               <span className="text-xs font-bold text-slate-200">
-                Madrasah MA'ARIF AL-MUTTAQIN
+                ARTUP STUDIO
               </span>
             </div>
 
             <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl transition">
               <i className="fa-solid fa-building-columns text-emerald-400 text-base"></i>
               <span className="text-xs font-bold text-slate-200">
-                Pengurus RT/RW TEMBORO KIDUL
+                Pengurus RT/RW KELATEN
               </span>
             </div>
 

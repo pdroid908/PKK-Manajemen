@@ -10,7 +10,6 @@ export default function AdminLayout() {
     { path: "/admin/pengumuman", label: "Pengumuman", icon: "fa-bullhorn" },
     { path: "/admin/keuangan", label: "Keuangan", icon: "fa-wallet" },
     { path: "/admin/barang", label: "Inventaris", icon: "fa-boxes-stacked" },
-    { path: "/admin/pinjaman", label: "Peminjam", icon: "fa-handshake" },
     { path: "/admin/warga", label: "Anggota", icon: "fa-users" },
   ];
 

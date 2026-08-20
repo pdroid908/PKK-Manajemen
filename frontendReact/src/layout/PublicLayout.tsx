@@ -184,7 +184,7 @@ export default function PublicLayout() {
 
           {/* Tengah: Judul Portal + Emoticon Senyum Lompat Pelan */}
           <div className="flex items-center gap-2 text-sm font-bold text-emerald-900">
-            <span>Sistem Informasi Manajemen PKK</span>
+            <span>Sistem Informasi Manajemen</span>
             <span className="animate-gentle-bounce text-base">😊</span>
           </div>
 

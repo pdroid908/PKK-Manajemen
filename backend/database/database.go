@@ -14,7 +14,7 @@ type DB struct{
 }
 
 func OnDB() (*DB, error){
-	dbUrl:= os.Getenv("DATABASE_URL")
+	dbUrl:= os.Getenv("DB_URL")
 	if dbUrl ==""{
 		return nil, fmt.Errorf("env di databaseGo kosong")
 	}

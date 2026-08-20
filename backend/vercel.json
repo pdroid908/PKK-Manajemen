@@ -1,15 +1,14 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "api/index.go",
-      "use": "@vercel/go"
-    }
+    { "src": "api/index.go", "use": "@vercel/go" },
+    { "src": "dist/**", "use": "@vercel/static" }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "api/index.go"
-    }
+    { "src": "/api/(.*)", "dest": "/api/index.go" },
+    { "src": "/assets/(.*)", "dest": "/dist/assets/$1" },
+    { "src": "/favicon.svg", "dest": "/dist/favicon.svg" },
+    { "src": "/icons.svg", "dest": "/dist/icons.svg" },
+    { "src": "/(.*)", "dest": "/dist/index.html" }
   ]
 }

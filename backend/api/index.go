@@ -7,6 +7,7 @@ import (
 	"mypkk/admin"
 	"mypkk/barang"
 	"mypkk/database"
+	"mypkk/middleware"
 	"mypkk/redis"
 	"mypkk/warga"
 
@@ -18,18 +19,14 @@ import (
 var app *gin.Engine
 
 func init() {
-	// 1. Load file .env jika ada (saat local dev)
 	_ = godotenv.Load()
 
-	// 2. Setup Router Gin
 	gin.SetMode(gin.ReleaseMode)
 	app = gin.New()
 	app.Use(gin.Recovery())
 
-	// 3. Setup CORS (Bisa menerima dari localhost dan Vercel frontend/backend)
 	app.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
-			// Izinkan semua domain localhost & vercel
 			return true
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -38,7 +35,6 @@ func init() {
 		AllowCredentials: true,
 	}))
 
-	// 4. Root & Health Check Endpoint (Mencegah crash jika root URL diakses)
 	app.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "success",
@@ -50,7 +46,6 @@ func init() {
 		c.JSON(http.StatusOK, gin.H{"status": "OK"})
 	})
 
-	// 5. Inisialisasi Database dengan Penanganan Crash
 	NewDB, err := database.OnDB()
 	if err != nil || NewDB == nil {
 		log.Printf("[ERROR] Gagal menginisialisasi database: %v", err)
@@ -58,10 +53,8 @@ func init() {
 	}
 	log.Println("[INFO] Database Serverless berhasil terhubung!")
 
-	// 6. Inisialisasi Redis
 	redis.ONRedis()
 
-	// 7. Inisialisasi DB Handlers
 	AdminDb := &admin.DB{
 		Database: NewDB.Database,
 	}
@@ -74,15 +67,15 @@ func init() {
 		Database: NewDB.Database,
 	}
 
-	// --- ROUTING ENDPOINT (Sama Persis dengan main.go) ---
+	AuthDb := &middleware.Database{
+		Db: NewDB.Database,
+	}
 
-	// admin pengumuman
-	app.POST("/admin/add/dashboard", AdminDb.AddPengumuman())
-	app.GET("/admin/pengumuman", AdminDb.CekPengumuman())
-	app.DELETE("/admin/delet", AdminDb.DelPengumuman())
-	app.POST("/pengumuman/refresh", AdminDb.RefreshP())
+	// --- PUBLIC ROUTES ---
+	app.POST("/api/login", AuthDb.Login())
+	app.POST("/api/register", AuthDb.Register())
 
-	// warga
+	// warga (Public)
 	app.POST("/warga/add", WargaDb.AddWarga())
 	app.PUT("/warga/update/:id", WargaDb.DelWarga())
 	app.GET("/warga/data", WargaDb.GetWarga())
@@ -90,28 +83,44 @@ func init() {
 	app.PUT("/warga/restore/:id", WargaDb.RestoreWarga())
 	app.DELETE("/warga/delete/:id", WargaDb.HardDelWarga())
 
-	// admin barang
-	app.POST("/admin/barang", BarangDb.AddBarang())
-	app.GET("/admin/barang", BarangDb.GetBarang())
-	app.DELETE("/admin/barang", BarangDb.DelBArang())
-	app.POST("/barang/refresh", BarangDb.RefreshB())
-
-	// admin peminjam
-	app.DELETE("/barang/peminjaman", BarangDb.DelPinjaman())
-	app.PUT("/barang/update", BarangDb.UpdateLoanStatus())
-	app.GET("/barang/peminjam", BarangDb.GetPinjaman())
-
-	// admin keuangan
-	app.POST("/admin/amount", AdminDb.AddKeuangan())
-	app.GET("/admin/data/amount", AdminDb.DataKeuangan())
-	app.DELETE("/admin/data/amount", AdminDb.DelKeuangan())
-	app.POST("/keuangan/refresh", AdminDb.RefreshK())
-
-	// user pinjam
+	// user pinjam (Public)
 	app.POST("/user/pinjam", BarangDb.AddPinjam())
+
+	// --- PROTECTED ADMIN ROUTES ---
+	adminGroup := app.Group("/admin")
+	adminGroup.Use(middleware.AuthMiddleware())
+	{
+		// admin pengumuman
+		adminGroup.POST("/add/dashboard", AdminDb.AddPengumuman())
+		adminGroup.GET("/pengumuman", AdminDb.CekPengumuman())
+		adminGroup.DELETE("/delet", AdminDb.DelPengumuman())
+
+		// admin barang
+		adminGroup.POST("/barang", BarangDb.AddBarang())
+		adminGroup.GET("/barang", BarangDb.GetBarang())
+		adminGroup.DELETE("/barang", BarangDb.DelBArang())
+
+		// admin peminjam
+		adminGroup.GET("/peminjam", BarangDb.GetPinjaman())
+
+		// admin keuangan
+		adminGroup.POST("/amount", AdminDb.AddKeuangan())
+		adminGroup.GET("/data/amount", AdminDb.DataKeuangan())
+		adminGroup.DELETE("/data/amount", AdminDb.DelKeuangan())
+	}
+
+	// --- PROTECTED UTILITY / REFRESH ROUTES ---
+	protectedGroup := app.Group("/")
+	protectedGroup.Use(middleware.AuthMiddleware())
+	{
+		protectedGroup.POST("/pengumuman/refresh", AdminDb.RefreshP())
+		protectedGroup.POST("/barang/refresh", BarangDb.RefreshB())
+		protectedGroup.DELETE("/barang/peminjaman", BarangDb.DelPinjaman())
+		protectedGroup.PUT("/barang/update", BarangDb.UpdateLoanStatus())
+		protectedGroup.POST("/keuangan/refresh", AdminDb.RefreshK())
+	}
 }
 
-// Handler adalah Entry Point utama Vercel Serverless Function
 func Handler(w http.ResponseWriter, r *http.Request) {
 	app.ServeHTTP(w, r)
 }
