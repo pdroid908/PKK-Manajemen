@@ -107,11 +107,11 @@ export default function DeveloperSignature() {
             <div className="flex-1 min-w-0">
               {/* LABEL PENGURUS */}
               <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400 block mb-0.5">
-                Pengurus PKK
+                Pengurus Kampung
               </span>
 
               <h3 className="text-sm font-bold text-white leading-tight">
-                Halo Warga Temboro Kidul!
+                Halo Sedulur
               </h3>
 
               <p className="text-[11px] text-emerald-200 mt-1 leading-relaxed">
