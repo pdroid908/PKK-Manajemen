@@ -71,53 +71,52 @@ func init() {
 		Db: NewDB.Database,
 	}
 
-	// --- PUBLIC ROUTES ---
-	app.POST("/api/login", AuthDb.Login())
-	app.POST("/api/register", AuthDb.Register())
+	// --- PUBLIC API ROUTES ---
+	apiPublic := app.Group("/api")
+	{
+		apiPublic.POST("/login", AuthDb.Login())
+		apiPublic.POST("/register", AuthDb.Register())
 
-	// warga (Public)
-	app.POST("/warga/add", WargaDb.AddWarga())
-	app.PUT("/warga/update/:id", WargaDb.DelWarga())
-	app.GET("/warga/data", WargaDb.GetWarga())
-	app.POST("/warga/refresh", warga.RefreshW())
-	app.PUT("/warga/restore/:id", WargaDb.RestoreWarga())
-	app.DELETE("/warga/delete/:id", WargaDb.HardDelWarga())
+		// Warga (Public)
+		apiPublic.POST("/warga/add", WargaDb.AddWarga())
+		apiPublic.PUT("/warga/update/:id", WargaDb.DelWarga())
+		apiPublic.GET("/warga/data", WargaDb.GetWarga())
+		apiPublic.POST("/warga/refresh", warga.RefreshW())
+		apiPublic.PUT("/warga/restore/:id", WargaDb.RestoreWarga())
+		apiPublic.DELETE("/warga/delete/:id", WargaDb.HardDelWarga())
 
-	// user pinjam (Public)
-	app.POST("/user/pinjam", BarangDb.AddPinjam())
+		// Pinjam Barang (Public)
+		apiPublic.POST("/user/pinjam", BarangDb.AddPinjam())
+	}
 
-	// --- PROTECTED ADMIN ROUTES ---
-	adminGroup := app.Group("/admin")
+	// --- PROTECTED ADMIN API ROUTES (/api/admin) ---
+	adminGroup := app.Group("/api/admin")
 	adminGroup.Use(middleware.AuthMiddleware())
 	{
-		// admin pengumuman
+		// Admin Pengumuman
 		adminGroup.POST("/add/dashboard", AdminDb.AddPengumuman())
-		adminGroup.GET("/pengumuman", AdminDb.CekPengumuman())
+		adminGroup.GET("/pengumuman", AdminDb.CekPengumuman()) // URL: /api/admin/pengumuman
 		adminGroup.DELETE("/delet", AdminDb.DelPengumuman())
 
-		// admin barang
+		// Admin Barang
 		adminGroup.POST("/barang", BarangDb.AddBarang())
 		adminGroup.GET("/barang", BarangDb.GetBarang())
 		adminGroup.DELETE("/barang", BarangDb.DelBArang())
 
-		// admin peminjam
+		// Admin Peminjam
 		adminGroup.GET("/peminjam", BarangDb.GetPinjaman())
 
-		// admin keuangan
+		// Admin Keuangan
 		adminGroup.POST("/amount", AdminDb.AddKeuangan())
 		adminGroup.GET("/data/amount", AdminDb.DataKeuangan())
 		adminGroup.DELETE("/data/amount", AdminDb.DelKeuangan())
-	}
 
-	// --- PROTECTED UTILITY / REFRESH ROUTES ---
-	protectedGroup := app.Group("/")
-	protectedGroup.Use(middleware.AuthMiddleware())
-	{
-		protectedGroup.POST("/pengumuman/refresh", AdminDb.RefreshP())
-		protectedGroup.POST("/barang/refresh", BarangDb.RefreshB())
-		protectedGroup.DELETE("/barang/peminjaman", BarangDb.DelPinjaman())
-		protectedGroup.PUT("/barang/update", BarangDb.UpdateLoanStatus())
-		protectedGroup.POST("/keuangan/refresh", AdminDb.RefreshK())
+		// Refresh & Utility Actions
+		adminGroup.POST("/pengumuman/refresh", AdminDb.RefreshP())
+		adminGroup.POST("/barang/refresh", BarangDb.RefreshB())
+		adminGroup.DELETE("/barang/peminjaman", BarangDb.DelPinjaman())
+		adminGroup.PUT("/barang/update", BarangDb.UpdateLoanStatus())
+		adminGroup.POST("/keuangan/refresh", AdminDb.RefreshK())
 	}
 }
 

@@ -93,7 +93,7 @@ export default function Keuangan() {
   const { data: transactions = [], isLoading: isFetchingInitial } = useQuery<FinanceTransaction[]>({
     queryKey: ["admin-keuangan"],
     queryFn: async () => {
-      const response = await apiFetch("/admin/data/amount");
+      const response = await apiFetch("/api/admin/data/amount");
       if (!response.ok) {
         throw new Error(`Server error (${response.status})`);
       }
@@ -120,7 +120,7 @@ export default function Keuangan() {
         formData.append("proof_image", selectedFile, selectedFile.name);
       }
 
-      const response = await apiFetch("/admin/amount", {
+      const response = await apiFetch("/api/admin/amount", {
         method: "POST",
         body: formData,
       });
@@ -153,7 +153,7 @@ export default function Keuangan() {
   // 3. MUTATION HAPUS TRANSAKSI DENGAN REACT QUERY
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await apiFetch("/admin/data/amount", {
+      const response = await apiFetch("/api/admin/data/amount", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: Number(id) }),
@@ -258,7 +258,7 @@ export default function Keuangan() {
   const handleRefreshKeuangan = async () => {
     setIsRefreshing(true);
     try {
-      await apiFetch("/keuangan/refresh");
+      await apiFetch("/api/keuangan/refresh");
       await queryClient.invalidateQueries({ queryKey: ["admin-keuangan"] });
       showToast("Data keuangan berhasil disinkronkan!", "success");
     } catch (error) {

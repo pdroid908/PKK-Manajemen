@@ -9,7 +9,7 @@ export default function ProtectedRoute() {
     const verifyAuth = async () => {
       try {
         // Mengirim request ping/auth ke endpoint backend
-        const res = await apiFetch("/admin/pengumuman");
+        const res = await apiFetch("/api/admin/pengumuman");
 
         if (res.ok) {
           setIsAuthenticated(true);
